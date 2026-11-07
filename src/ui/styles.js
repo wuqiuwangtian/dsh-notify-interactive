@@ -201,7 +201,7 @@ export const POPUP_CSS = String.raw`
   gap: 14px;
   max-height: 44vh;
   overflow-y: auto;
-  padding: 0 14px 4px;
+  padding: 0;
 }
 .dni-question { display: flex; flex-direction: column; gap: 6px; }
 .dni-question-header {
@@ -315,7 +315,7 @@ export const POPUP_CSS = String.raw`
   word-break: break-word;
 }
 .dni-error {
-  margin: 0 14px 12px;
+  margin: 8px 0 0;
   padding: 8px 10px;
   border-radius: 8px;
   background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent);
@@ -324,7 +324,7 @@ export const POPUP_CSS = String.raw`
   line-height: 18px;
 }
 .dni-success {
-  margin: 0 14px 12px;
+  margin: 8px 0 0;
   padding: 8px 10px;
   border-radius: 8px;
   background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 12%, transparent);
