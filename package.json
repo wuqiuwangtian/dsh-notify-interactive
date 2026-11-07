@@ -62,9 +62,12 @@
     "build": "node scripts/build.mjs",
     "check": "node --check lib/index.js && node --check lib/client.js",
     "test": "node --test tests/*.test.mjs",
-    "verify": "pnpm build && pnpm check && pnpm test"
+    "verify": "pnpm build && pnpm check && pnpm test && pnpm render-smoke",
+    "render-smoke": "node scripts/render-smoke.mjs"
   },
   "devDependencies": {
-    "esbuild": "^0.25.0"
+    "esbuild": "^0.25.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
   }
 }
