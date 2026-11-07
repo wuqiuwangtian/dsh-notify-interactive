@@ -31,7 +31,7 @@
   - profile `node_modules/dsh-notify-interactive` 指向 `/home/wqwt/code/dsh-notify-interactive`
 - `cordis_inspect_query` `Slots.listSubTree`：
   - `settings.section` occupants 出现 `notify-interactive`（order 16，active true）。
-  - `shell.overlay` occupants 出现 `notify-interactive.overlay`（order 100，初始 active false；该组件在无卡片时返回空 wrapper，需刷新后确认）。
+  - `shell.overlay` occupants 出现 `notify-interactive.overlay`（order 100）。**刷新后复查 active true**，说明 Client 模块已加载且 Overlay 正常挂载。
 - 页面需要刷新以加载新的 client bundle（当前会话没有 `pnpm run dev:web` watcher）。
 - GitHub：<https://github.com/wuqiuwangtian/dsh-notify-interactive>
 - Release：<https://github.com/wuqiuwangtian/dsh-notify-interactive/releases/tag/v0.1.0>（附 `dsh-notify-interactive-0.1.0.tgz`）

@@ -116,13 +116,20 @@ export function applyTheme(sourceDocument, targetDocument) {
   if (targetRoot === undefined || targetRoot === null) return
   const view = sourceDocument.defaultView
   if (view === null || view === undefined) return
-  const computed = view.getComputedStyle(sourceRoot)
+  const rootComputed = view.getComputedStyle(sourceRoot)
+  const bodyComputed = sourceDocument.body === null
+    ? rootComputed
+    : view.getComputedStyle(sourceDocument.body)
   const names = new Set([...KNOWN_TOKENS, ...collectFromStyleSheets(sourceDocument)])
   for (const name of names) {
-    const value = computed.getPropertyValue(name)
+    const value = rootComputed.getPropertyValue(name) || bodyComputed.getPropertyValue(name)
     if (value !== undefined && value !== null && value !== '') {
       targetRoot.style.setProperty(name, value.trim())
     }
+  }
+  const colorScheme = rootComputed.colorScheme || bodyComputed.colorScheme
+  if (colorScheme !== undefined && colorScheme !== null && colorScheme !== '') {
+    targetRoot.style.colorScheme = colorScheme
   }
   copyThemeAttributes(sourceDocument, targetDocument)
 }
