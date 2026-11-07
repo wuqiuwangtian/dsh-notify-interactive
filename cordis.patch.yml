@@ -1,0 +1,8 @@
+# Bundle patch for dsh-notify-interactive.
+#
+# This bundle only inserts its own row; it never overrides host rows.
+# The Host half is an empty apply(); the browser half registers the
+# `shell.overlay` cards and the `settings.section` page.
+- insert:
+    - id: notify-interactive
+      name: 'dsh-notify-interactive'

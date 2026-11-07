@@ -1,0 +1,70 @@
+{
+  "name": "dsh-notify-interactive",
+  "version": "0.1.0",
+  "description": "Interactive DSH Web reminders: approvals, questions, plan reviews, and turn completion with sound, an always-on-top DSH-styled popup, and Windows system notifications.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "lib",
+    "locale",
+    "icon.svg",
+    "cordis.patch.yml",
+    "README.md",
+    "README.en.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "author": "wuqiuwangtian",
+  "homepage": "https://github.com/wuqiuwangtian/dsh-notify-interactive#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wuqiuwangtian/dsh-notify-interactive.git"
+  },
+  "bugs": {
+    "url": "https://github.com/wuqiuwangtian/dsh-notify-interactive/issues"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "notifications",
+    "popup",
+    "approval",
+    "ask-user"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings-shell",
+        "@deepseek-ai/dsh-client-ui-workspace"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "node --check lib/index.js && node --check lib/client.js",
+    "test": "node --test tests/*.test.mjs",
+    "verify": "pnpm build && pnpm check && pnpm test"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}
