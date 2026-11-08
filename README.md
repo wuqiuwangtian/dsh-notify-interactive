@@ -1,6 +1,6 @@
 # dsh-notify-interactive
 
-> DSH 的“任务中断”提醒插件。正在看当前会话时不打扰；否则优先弹出自绘的 DSH 风格交互弹窗；弹窗不可用（或没有 Web UI，如 CLI/TUI）时，自动使用 Windows 弹窗提醒（只能提醒，不能作答）。
+> DSH 的“任务中断”提醒插件。正在看当前会话时不打扰；否则直接拉起一个带具体内容的 Windows 小窗；需要窗口内作答时，再按需打开 DSH 风格交互弹窗。CLI/TUI 同样走 Windows 小窗。
 
 [English](README.en.md) · [需求文档](docs/requirements.md) · [同类项目调研](docs/research.md) · [验证记录](docs/verification.md)
 
@@ -14,9 +14,9 @@
 
 规则只有一条：**如果你正聚焦于当前会话，就什么都不发生。**否则：
 
-1. 交互弹窗已打开并保持 → 在弹窗里显示卡片，直接批准/拒绝/选择/填写回答；
-2. 弹窗未打开或不可用 → 宿主弹出 Windows 提醒，告诉你哪个会话需要你；这种提醒不能作答；
-3. 没有 Web UI（CLI/TUI）→ 宿主直接走 Windows 提醒。
+1. 默认直接拉起带具体内容的 **Windows 小窗**（只提醒，不能作答）；
+2. 需要窗口内作答时，按需打开 DSH 风格交互弹窗；它只在有提醒时打开，处理完自动关闭；
+3. 没有 Web UI（CLI/TUI）→ 宿主直接走 Windows 小窗。
 
 ## 功能
 
@@ -24,7 +24,7 @@
 |---|---|
 | 事件 | 权限审批、提问、计划审核、任务完成 |
 | 静默规则 | 聚焦当前会话 → 不提醒 |
-| Web 交互弹窗 | Document Picture-in-Picture（始终置顶），回退普通弹窗 |
+| Web 交互弹窗 | 可选、按需打开（仅有提醒时）；Document Picture-in-Picture 始终置顶，处理完自动关闭 |
 | 弹窗内操作 | 审批允许/拒绝；提问单选/多选/自定义/跳过；计划批准/拒绝；完成回到对话 |
 | CLI/TUI 兜底 | 宿主观察 session 事件，通过 PowerShell 弹 Windows 提醒 |
 | Web 关页兜底 | Web 客户端上报 presence；页面关闭后宿主自动接管 Windows 提醒 |
@@ -34,7 +34,7 @@
 
 ## 状态
 
-- 版本 `0.2.0`（第一阶段重构）
+- 版本 `0.2.1`（第一阶段重构）
 - 目标 DSH：`0.2.2-rc.1` 线，Web / CLI / TUI profile
 - 已移除：页内通知卡片、浏览器 Notification 通道、系统通知权限、弹窗开关等冗余配置
 
@@ -44,36 +44,36 @@
 dsh plugin --profile web add https://github.com/wuqiuwangtian/dsh-notify-interactive
 ```
 
-或下载 Release 的 `dsh-notify-interactive-0.2.0.tgz`：
+或下载 Release 的 `dsh-notify-interactive-0.2.1.tgz`：
 
 ```sh
-dsh plugin --profile web add ./dsh-notify-interactive-0.2.0.tgz
+dsh plugin --profile web add ./dsh-notify-interactive-0.2.1.tgz
 ```
 
 CLI/TUI profile 同样安装这个包；宿主半区会在没有 Web UI 时接管 Windows 提醒。
 
-安装后刷新 DSH 页面。Web 交互弹窗需要手动打开一次；CLI/TUI 不需要打开任何窗口。
+安装后刷新 DSH 页面。交互弹窗不需要常驻；CLI/TUI 不需要打开任何窗口。
 
-> 从 0.1.x 升级到 0.2.0 时，宿主半区新增了 Windows 兜底与 presence 路由，需要重启一次 DSH 进程；之后日常只需刷新页面。
+> 从 0.1.x 升级到 0.2.x 时，宿主半区新增了 Windows 兜底与 presence 路由，需要重启一次 DSH 进程；之后日常只需刷新页面。
 
 ## 首次使用
 
 1. 刷新 DSH 页面。
-2. **交互弹窗是可选的**：只有想在窗口内作答时才点 **打开弹窗**。浏览器安全策略要求一次用户点击才能打开它。
-3. 不打开弹窗也完全可用：每条消息都会拉起一个 Windows 小窗提醒（只提醒，不能作答）；点 **测试 Windows 提醒** 可验证。
+2. 默认什么都不用打开：每条消息都会拉起一个带具体内容的 Windows 小窗（只提醒，不能作答）；点 **测试 Windows 提醒** 可验证。
+3. 想窗口内作答时，才点 **打开弹窗**。它只在有提醒时可用，处理完自动关闭；没有提醒时不会出现空黑框。
 4. 点 **测试审批卡 / 测试提问卡 / 测试完成卡**：弹窗打开时显示交互卡片；弹窗关闭时拉起 Windows 演示小窗。
-5. 关闭弹窗后，后续消息自动走 Windows 小窗；需要窗口内作答时再打开。
 
 ## 规则
 
 | 场景 | 行为 |
 |---|---|
 | 正在看当前会话 | 不提醒 |
-| Web 页面在前台，但事件属于其他会话 | 弹窗已打开 → 弹窗卡片；未打开 → Windows 弹窗提醒 |
-| Web 页面失焦/隐藏 | 弹窗已打开 → 弹窗卡片；未打开 → Windows 弹窗提醒 |
-| Web 页面关闭 / CLI / TUI | 宿主 Windows 弹窗提醒 |
+| Web 页面在前台，但事件属于其他会话 | Windows 小窗（直接带内容）；如已按需打开交互弹窗，则在弹窗内显示卡片 |
+| Web 页面失焦/隐藏 | Windows 小窗（直接带内容）；如已按需打开交互弹窗，则在弹窗内显示卡片 |
+| Web 页面关闭 / CLI / TUI | 宿主 Windows 小窗 |
 
-- Web 交互弹窗**不能由后台事件自动打开**（浏览器限制）；需要打开一次并保持。
+- Web 交互弹窗**不能由后台事件自动打开**（浏览器限制）；需要时手动打开，且只在有提醒时可用。
+- 交互弹窗没有空状态：没有卡片时会自动关闭，不会出现“暂无提醒”的黑框。
 - Windows 兜底是**只读提醒**：它不会批准、拒绝或回答问题；你需要回到 DSH/终端处理。
 - 音效是可选项；Windows 兜底会播放系统提示音。
 - 当前会话的审批/提问/完成由 DSH 自己的界面处理，插件不重复提醒。
@@ -86,7 +86,7 @@ CLI/TUI profile 同样安装这个包；宿主半区会在没有 Web UI 时接�
 | 播放提示音 | 开 | Web 音效 |
 | 音效 | 清脆铃音 | 6 个本地合成预设，含静音 |
 | 音量 | 70% | 0–100% |
-| 打开/关闭弹窗 | — | 手动控制常驻交互弹窗 |
+| 打开/关闭弹窗 | — | 仅有提醒时可打开；处理完自动关闭 |
 | 测试弹窗 | — | 添加演示卡片并打开弹窗 |
 | 测试 Windows 提醒 | — | 直接调用宿主 Windows 兜底 |
 | 测试审批/提问/完成卡 | — | 本地演示，不会回答真实请求 |
@@ -110,13 +110,21 @@ Web Client
         │
         ├─ 聚焦当前会话 → 静默
         └─ 否则：
-             交互弹窗已打开 → 加入弹窗队列
-             未打开 → POST /dsh-notify-interactive/windows-notify（宿主兜底）
+             卡片始终加入本地队列
+             交互弹窗未打开 → POST /dsh-notify-interactive/windows-notify（宿主小窗）
+             交互弹窗打开 → 弹窗渲染卡片；处理完自动关闭
 ```
 
 - Web 客户端不会注册 `shell.overlay`，也没有页内通知。
 - Host 不监听 approval/question waterfall，不改变审批链；只读 session 事件。
-- Windows 兜底由 `WScript.Shell.Popup` 显示，5 分钟自动关闭；不阻塞宿主进程。
+- Windows 兜底由 `WScript.Shell.Popup` 显示，标题/正文经 base64 传入，5 分钟自动关闭；不阻塞宿主进程。
+
+## 原生 Windows 弹窗能输入/选择吗？
+
+- 当前兜底使用的 `WScript.Shell.Popup` **不能**：它只有“确定”，没有输入框、单选/多选。
+- Windows toast 的输入/动作支持不可靠，不适合做自定义回答。
+- **WinForms/WPF 原生窗口可以**：可以放单选、多选、文本框并回传结果；如果确实需要“原生可作答小窗”，可以作为第二阶段实现。代价是 UI 无法与 DSH 完全一致，而且宿主需要接管审批/提问的应答链。
+- 现在可作答的是 DSH 风格 Web 交互弹窗：按需打开、只在有提醒时显示、处理完自动关闭；不打开时用 Windows 小窗提醒。
 
 ## 已知边界
 

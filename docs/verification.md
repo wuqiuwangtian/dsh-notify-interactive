@@ -33,9 +33,9 @@
   - `application: applied`；`warnings: []`
   - profile 依赖 `dsh-notify-interactive: link:/home/wqwt/code/dsh-notify-interactive`
 - Client 只注册 `settings.section`（id `notify-interactive`）；**不再注册 `shell.overlay`**。刷新页面后旧 overlay 项应消失。
-- 页面需要刷新以加载新的 client bundle；宿主半区（Windows 兜底/presence 路由）是新增的，升级到 0.2.0 需要重启一次 DSH 进程。
+- 页面需要刷新以加载新的 client bundle；宿主半区（Windows 兜底/presence 路由）是新增的，升级到 0.2.x 需要重启一次 DSH 进程。
 - GitHub：<https://github.com/wuqiuwangtian/dsh-notify-interactive>
-- Release：<https://github.com/wuqiuwangtian/dsh-notify-interactive/releases/tag/v0.2.0>
+- Release：<https://github.com/wuqiuwangtian/dsh-notify-interactive/releases/tag/v0.2.1>
 
 ## 3. 用户手工验收清单
 
@@ -66,7 +66,7 @@
 
 1. 关闭交互弹窗。
 2. 切到别的窗口/会话，触发审批/提问/完成。
-3. 预期：宿主弹 Windows 提醒（只读）；回到 DSH 后在自带 UI 处理。
+3. 预期：宿主弹带内容的 Windows 小窗（只读）；卡片仍保存在本地，回到 DSH 后可在设置里“打开弹窗”查看并作答，处理完弹窗自动关闭。
 
 ### 3.5 CLI/TUI
 

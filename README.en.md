@@ -1,6 +1,6 @@
 # dsh-notify-interactive
 
-> Reminders for DeepSeek Harness when a task needs you. Stay silent while you are focused on the current conversation; otherwise show the DSH-styled interactive popup, or a Windows popup fallback when the popup is unavailable (or there is no Web UI, such as CLI/TUI). The Windows fallback is reminder-only.
+> Reminders for DeepSeek Harness when a task needs you. Stay silent while you are focused on the current conversation; otherwise raise a small Windows popup with the actual content. Open the optional DSH-styled interactive popup only when you want to answer in the window. CLI/TUI uses the same Windows popup.
 
 [中文](README.md) · [Requirements](docs/requirements.md) · [Research](docs/research.md) · [Verification](docs/verification.md)
 
@@ -14,9 +14,9 @@ Only interrupts when a human is needed:
 
 One rule: **while you are focused on the current conversation, nothing happens.** Otherwise:
 
-1. the interactive popup is open → show the card there and answer directly;
-2. the popup is closed or unavailable → the host shows a Windows popup reminder (no answering);
-3. no Web UI (CLI/TUI) → the host uses the Windows popup reminder directly.
+1. by default the host raises a small Windows popup with the actual content (reminder-only);
+2. open the DSH-styled interactive popup only when you want to answer; it opens on demand and closes after handling;
+3. no Web UI (CLI/TUI) → the same Windows popup.
 
 ## Features
 
@@ -24,7 +24,7 @@ One rule: **while you are focused on the current conversation, nothing happens.*
 |---|---|
 | Events | Approval, question, plan review, turn completion |
 | Silence rule | Focused on the current conversation → no reminder |
-| Web popup | Document Picture-in-Picture (always on top), normal popup fallback |
+| Web popup | Optional, on demand; Document Picture-in-Picture (always on top), auto-closes after handling |
 | In-popup actions | Allow/reject; select/custom/skip questions; approve/decline plan; back to conversation |
 | CLI/TUI fallback | Host observes session events and shows a PowerShell Windows popup |
 | Closed-tab fallback | Web client reports presence; the host takes over after the page is gone |
@@ -34,7 +34,7 @@ One rule: **while you are focused on the current conversation, nothing happens.*
 
 ## Status
 
-- Version `0.2.0` (phase 1 redesign)
+- Version `0.2.1` (phase 1 redesign)
 - DSH `0.2.2-rc.1` line, Web / CLI / TUI profiles
 - Removed: in-page cards, browser Notification channel, notification permission, popup toggle, behavior clutter
 
@@ -47,33 +47,33 @@ dsh plugin --profile web add https://github.com/wuqiuwangtian/dsh-notify-interac
 or install the release tarball:
 
 ```sh
-dsh plugin --profile web add ./dsh-notify-interactive-0.2.0.tgz
+dsh plugin --profile web add ./dsh-notify-interactive-0.2.1.tgz
 ```
 
 The same package works in CLI/TUI profiles; the host half takes over when no Web UI is present.
 
-Refresh the DSH page after installing. The Web popup must be opened once; CLI/TUI needs no window.
+Refresh the DSH page after installing. The interactive popup is not required; CLI/TUI needs no window.
 
-> Upgrading from 0.1.x to 0.2.0 adds the host Windows fallback and presence routes, so restart the DSH process once; later updates only need a page refresh.
+> Upgrading from 0.1.x to 0.2.x adds the host Windows fallback and presence routes, so restart the DSH process once; later updates only need a page refresh.
 
 ## First run
 
 1. Refresh DSH.
-2. **The interactive popup is optional**: open it only when you want to answer in the window. Browser security requires one click.
-3. You do not need to open it: every message brings a small Windows popup reminder (reminder-only). Use **Test Windows reminder** to verify.
+2. Nothing needs to be open by default: every message raises a small Windows popup with the actual content (reminder-only). Use **Test Windows reminder** to verify.
+3. Open the optional interactive popup only when you want to answer in the window; it is available only while a card exists and closes after handling.
 4. The test approval/question/completion cards show interactive cards while the popup is open; with it closed they raise a Windows demo popup.
-5. After closing the popup, messages use the Windows popup; reopen only when you want in-window answers.
 
 ## Rules
 
 | Situation | Behavior |
 |---|---|
 | Focused on the current conversation | No reminder |
-| Web page in front, another conversation | Popup open → popup card; closed → Windows popup |
-| Web page unfocused/hidden | Popup open → popup card; closed → Windows popup |
+| Web page in front, another conversation | Windows popup with content; if the optional popup is already open, the card appears there |
+| Web page unfocused/hidden | Windows popup with content; if the optional popup is already open, the card appears there |
 | Web page closed / CLI / TUI | Host Windows popup |
 
-- The Web interactive popup **cannot be opened by a background event** (browser restriction); open it once and keep it.
+- The Web interactive popup **cannot be opened by a background event** (browser restriction); open it manually when a card exists.
+- It has no empty state: it closes automatically when there is nothing to show.
 - The Windows fallback is **reminder-only**; it cannot approve, reject, or answer.
 - Sound is optional; the Windows fallback plays the system sound.
 - The current conversation is handled by DSH's own UI; the plugin stays silent.
@@ -86,7 +86,7 @@ Refresh the DSH page after installing. The Web popup must be opened once; CLI/TU
 | Play a sound | on | Web sound |
 | Sound | chime | Six local presets, including silent |
 | Volume | 70% | 0–100% |
-| Open/close popup | — | Manual popup control |
+| Open/close popup | — | Available only while a card exists; closes after handling |
 | Test popup | — | Add a demo card and open the popup |
 | Test Windows reminder | — | Call the host Windows fallback |
 | Test cards | — | Local demos; never answer a real request |
@@ -108,13 +108,21 @@ Web client
   uiSession.sessionStatus + sessions.list
         ├─ focused current conversation → silent
         └─ otherwise:
-             popup open → add a card to the popup queue
+             the card is stored locally
              popup closed → POST /dsh-notify-interactive/windows-notify
+             popup open → render the card; close when empty
 ```
 
 - No `shell.overlay`; no in-page notifications.
 - The host does not listen to the approval/question waterfall; it only observes committed session events.
-- The Windows fallback uses `WScript.Shell.Popup`, auto-closes after 5 minutes, and does not block the host.
+- The Windows fallback uses `WScript.Shell.Popup`, receives title/body via base64, auto-closes after 5 minutes, and does not block the host.
+
+## Can a native Windows popup accept input/selection?
+
+- The current fallback, `WScript.Shell.Popup`, **cannot**: it only has OK, with no text field or options.
+- Windows toast input/action support is unreliable and unsuitable for custom answers.
+- **A WinForms/WPF dialog can**: it can contain radio buttons, checkboxes, text fields, and return the result. If a native answerable popup is required, it can be a phase 2 feature. The tradeoff is a separate native UI that cannot match DSH exactly, and the host would need to own the answer chain.
+- Today the answerable surface is the DSH-styled Web popup: opened on demand only while a card exists, and closed after handling. When closed, the Windows reminder is used.
 
 ## Limitations
 

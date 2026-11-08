@@ -28,7 +28,7 @@
 | [610la/dsh-notification-center](https://github.com/610la/dsh-notification-center) | MIT；活跃 | 浏览器通知 + 21 音效；按事件配置 | 弹窗不可作答 |
 | [GeekRicardo/dsh-notification](https://github.com/GeekRicardo/dsh-notification) | MIT；活跃 | 浏览器系统通知；点击聚焦并切会话 | 系统通知不可作答 |
 
-## 3. 设计结论（0.2.0）
+## 3. 设计结论（0.2.1）
 
 用户要求的逻辑接近 Codex Desktop：
 
