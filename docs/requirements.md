@@ -1,7 +1,7 @@
 # 需求文档（唯一权威）
 
 > 项目：`dsh-notify-interactive`
-> 阶段：第一阶段已实现（0.1.2）；第二阶段待排期
+> 阶段：第一阶段已实现（0.1.3）；第二阶段待排期
 > 目标宿主：DSH Web `0.2.2-rc.1` 线，`web` profile
 
 ## 1. 原始要求
@@ -65,7 +65,7 @@
 
 - MIT LICENSE。
 - GitHub 仓库 `wuqiuwangtian/dsh-notify-interactive`。
-- `v0.1.2` Release + tgz。
+- `v0.1.3` Release + tgz。
 - 安装到当前 `web` profile。
 - 单元测试、CI、README/AGENTS/需求/调研/验证文档。
 

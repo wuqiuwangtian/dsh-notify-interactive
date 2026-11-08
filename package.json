@@ -1,6 +1,6 @@
 {
   "name": "dsh-notify-interactive",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Interactive DSH Web reminders: approvals, questions, plan reviews, and turn completion with sound, an always-on-top DSH-styled popup, and Windows system notifications.",
   "type": "module",
   "main": "lib/index.js",
