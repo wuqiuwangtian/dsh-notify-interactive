@@ -109,7 +109,7 @@ export function apply(ctx) {
   runtime.openPopup = () => popupController.open()
   runtime.closePopup = () => popupController.close()
   runtime.resetSettings = () => settingsStore.reset()
-  runtime.previewSound = (preset, volume) => soundPlayer.play(preset, volume)
+  runtime.previewSound = (preset, volume) => soundPlayer.preview(preset, volume)
   runtime.requestNotificationPermission = () => systemNotifier.requestPermission()
   runtime.testSystemNotification = () => {
     systemNotifier.show({
@@ -138,7 +138,7 @@ export function apply(ctx) {
     if (item !== undefined) notificationStore.upsert(item)
   }
   runtime.ready = true
-  runtime.version = '0.1.1'
+  runtime.version = '0.1.2'
   try {
     // Diagnostics/support handle; the settings page is the normal entry point.
     globalThis.__dshNotifyInteractive = runtime

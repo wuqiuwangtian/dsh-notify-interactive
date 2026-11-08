@@ -32,7 +32,7 @@
 
 ## 状态
 
-- 版本：`0.1.1`（第一阶段）
+- 版本：`0.1.2`（第一阶段）
 - 目标 DSH：`0.2.2-rc.1` 线（Web profile）
 - 已实现：音效 / 弹窗 / 系统通知三通道、审批/提问/计划审核/完成卡片、设置页、测试卡片
 - 第二阶段：按场景分别开关/选音效、完成原因细分、按会话静音、多标签页去重、可选原生 toast
@@ -47,10 +47,10 @@ dsh plugin --profile web add https://github.com/wuqiuwangtian/dsh-notify-interac
 
 ### 从 Release 安装
 
-下载 `dsh-notify-interactive-0.1.1.tgz` 后：
+下载 `dsh-notify-interactive-0.1.2.tgz` 后：
 
 ```sh
-dsh plugin --profile web add ./dsh-notify-interactive-0.1.1.tgz
+dsh plugin --profile web add ./dsh-notify-interactive-0.1.2.tgz
 ```
 
 ### 本地开发安装
