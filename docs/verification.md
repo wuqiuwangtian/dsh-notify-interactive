@@ -8,7 +8,7 @@
 |---|---|---|
 | 构建 | `pnpm build` | 通过；`lib/client.js` ≈ 123 KB，`lib/index.js` 为 Host 空 `apply()` |
 | 语法 | `pnpm check`（`node --check lib/index.js lib/client.js`） | 通过 |
-| 单元测试 | `pnpm test` | **43 passed / 0 failed** |
+| 单元测试 | `pnpm test` | **44 passed / 0 failed** |
 | 服务端渲染冒烟 | `pnpm render-smoke` | 通过；Settings 7629B、Overlay 7241B、PopupApp 7814B |
 | 客户端加载冒烟 | 临时 Node VM mock `window.__ModuleLoader__` + `react`/`react-dom` | 通过；`inject = slots,locale,sessions,uiSession`；注册 `shell.overlay/notify-interactive.overlay` 与 `settings.section/notify-interactive` |
 | 静态禁入包 | `grep dsh-client-ui-primitives lib/client.js` | 无匹配 |

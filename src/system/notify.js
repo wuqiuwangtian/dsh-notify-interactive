@@ -42,7 +42,10 @@ export function createSystemNotifier() {
       const notification = new globalThis.Notification(String(title), {
         body: truncate(body),
         tag: key,
-        requireInteraction: kind !== 'completion',
+        // Keep completion toasts in the notification center as well, so an
+        // away user who returns later can still see what happened. Browsers
+        // and the OS treat this as a hint, not a guarantee.
+        requireInteraction: true,
         silent: true,
       })
       notification.onclick = () => {
