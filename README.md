@@ -116,7 +116,7 @@ Web Client
 
 - Web 客户端不会注册 `shell.overlay`，也没有页内通知。
 - Host 不监听 approval/question waterfall，不改变审批链；只读 session 事件。
-- Windows 兜底由 `WScript.Shell.Popup` 显示，20 秒自动关闭；不阻塞宿主进程。
+- Windows 兜底由 `WScript.Shell.Popup` 显示，5 分钟自动关闭；不阻塞宿主进程。
 
 ## 已知边界
 

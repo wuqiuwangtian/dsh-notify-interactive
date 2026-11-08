@@ -114,7 +114,7 @@ Web client
 
 - No `shell.overlay`; no in-page notifications.
 - The host does not listen to the approval/question waterfall; it only observes committed session events.
-- The Windows fallback uses `WScript.Shell.Popup`, auto-closes after 20s, and does not block the host.
+- The Windows fallback uses `WScript.Shell.Popup`, auto-closes after 5 minutes, and does not block the host.
 
 ## Limitations
 

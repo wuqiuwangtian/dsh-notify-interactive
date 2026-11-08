@@ -7,7 +7,7 @@
 - 删除页内通知卡片与 `shell.overlay` 注册；所有通知只在交互弹窗或 Windows 兜底中出现。
 - 删除浏览器 Notification 通道、通知权限、系统通知开关、弹窗开关、行为/子会话/卡片数等冗余设置。
 - 规则简化为一条：聚焦当前会话 → 静默；否则优先交互弹窗，弹窗不可用 → 宿主 Windows 提醒。
-- 新增宿主半区：观察 `session/event`（approval/asked、ask_user_question/exit_plan_mode、turn/end），无活跃 Web presence 时通过 PowerShell 弹 Windows 提醒（只读）。
+- 新增宿主半区：观察 `session/event`（approval/asked、ask_user_question/exit_plan_mode、turn/end），无活跃 Web presence 时通过 PowerShell 弹 Windows 提醒（只读，5 分钟自动关闭）。
 - 新增 Web presence 上报与宿主 `/dsh-notify-interactive/presence`、`/dsh-notify-interactive/windows-notify` 路由，兼容 Web / CLI / TUI。
 - 弹窗 UI 极简化：去掉图标、副标题、后端徽标、页脚说明等非操作内容；只保留标题、上下文、会话入口和操作。
 - 设置页精简为：总开关、音效、弹窗打开/测试、Windows 提醒测试、测试卡、恢复默认。

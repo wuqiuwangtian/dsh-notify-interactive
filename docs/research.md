@@ -90,7 +90,7 @@
 
 - WSL：`/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe`。
 - Windows：`powershell.exe`。
-- `WScript.Shell.Popup(text, 20, title, 64)`：非阻塞（独立进程）、20 秒自动关闭；不能作答。
+- `WScript.Shell.Popup(text, 20, title, 64)`：非阻塞（独立进程）、5 分钟自动关闭；不能作答。
 - `[System.Media.SystemSounds]::Asterisk.Play()` 提供系统提示音。
 
 ## 5. 开发前检查点

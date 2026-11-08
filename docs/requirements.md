@@ -143,4 +143,4 @@
 - Windows 兜底依赖 PowerShell/桌面；无 GUI 或非 Windows 无兜底。
 - presence 心跳/`pagehide` 失败时，宿主最多 15 秒后才接管。
 - 多标签页可能重复投递；第二阶段解决。
-- Windows `WScript.Shell.Popup` 是模态系统对话框，可能抢焦点；20 秒自动关闭。
+- Windows `WScript.Shell.Popup` 是模态系统对话框，可能抢焦点；5 分钟自动关闭。
