@@ -9,7 +9,7 @@
 - 规则简化为一条：聚焦当前会话 → 静默；否则优先交互弹窗，弹窗不可用 → 宿主 Windows 提醒。
 - 新增宿主半区：观察 `session/event`（approval/asked、ask_user_question/exit_plan_mode、turn/end），无活跃 Web presence 时通过 PowerShell 弹 Windows 提醒（只读，5 分钟自动关闭）。
 - 新增 Web presence 上报与宿主 `/dsh-notify-interactive/presence`、`/dsh-notify-interactive/windows-notify` 路由，兼容 Web / CLI / TUI。
-- 弹窗 UI 极简化：去掉外层标题栏/关闭按钮、图标、副标题、后端徽标、页脚说明、卡片右上角关闭等非操作内容；只保留最内侧卡片（标题、上下文、会话入口、操作）。关闭使用系统窗口。
+- 弹窗 UI 极简化：去掉外层标题栏/关闭按钮、图标、副标题、后端徽标、页脚说明、卡片右上角关闭、完成卡的冗余“关闭”等非操作内容；只保留最内侧卡片（标题、上下文、会话入口、操作）。关闭使用系统窗口。
 - 设置页精简为：总开关、音效、弹窗打开/测试、Windows 提醒测试、测试卡、恢复默认。
 - 设置 schema 升级到 v2（`dsh.notify-interactive.settings.v2`）；旧 v1 设置不再读取。
 - 测试 45 个；新增宿主文案/presence 策略与宿主 apply 冒烟。

@@ -32,10 +32,6 @@ export function CompletionCard({ item, t, onOpenSession, onDismiss }) {
         onDismiss?.(item.id)
       },
     }, t('card.completion.open')),
-    h(CardButton, {
-      variant: 'ghost',
-      onClick: () => onDismiss?.(item.id),
-    }, t('card.completion.dismiss')),
     ),
   })
 }
