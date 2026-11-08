@@ -32,7 +32,7 @@ It never answers for you: every decision requires an explicit click.
 
 ## Status
 
-- Version `0.1.0` (phase 1), DSH `0.2.2-rc.1` line, Web profile.
+- Version `0.1.1` (phase 1), DSH `0.2.2-rc.1` line, Web profile.
 - Phase 2: per-scenario toggles/sounds, turn-end reason, per-session mute, multi-tab leader election, optional native toast.
 
 ## Install
@@ -44,7 +44,7 @@ dsh plugin --profile web add https://github.com/wuqiuwangtian/dsh-notify-interac
 or install the release tarball:
 
 ```sh
-dsh plugin --profile web add ./dsh-notify-interactive-0.1.0.tgz
+dsh plugin --profile web add ./dsh-notify-interactive-0.1.1.tgz
 ```
 
 Refresh the DSH page after installing. The Host half is an empty `apply()`; the browser half loads with the page.
