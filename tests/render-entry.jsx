@@ -84,6 +84,12 @@ const checks = [
   ['popup question card', popupHtml.includes('需要你的回答')],
   ['popup completion card', popupHtml.includes('本轮已结束')],
   ['popup plan card', popupHtml.includes('计划审核')],
+  ['popup has no backend badge', !popupHtml.includes('始终置顶')],
+  ['popup has no decorative subtitle', !popupHtml.includes('审批、提问与完成提醒')],
+  ['popup has no settings footer', !popupHtml.includes('配置通道')],
+  ['popup cards have no decorative icon block', !popupHtml.includes('dni-card-icon')],
+  ['settings has no old system-notification section', !settingsHtml.includes('Windows 系统通知')],
+  ['settings has no old do-not-disturb section', !settingsHtml.includes('当前会话不打扰')],
 ]
 const failed = checks.filter(([, ok]) => !ok)
 if (failed.length > 0) {
