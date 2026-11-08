@@ -8,7 +8,7 @@
 |---|---|---|
 | 构建 | `pnpm build` | 通过；`lib/client.js` ≈ 123 KB，`lib/index.js` 为 Host 空 `apply()` |
 | 语法 | `pnpm check`（`node --check lib/index.js lib/client.js`） | 通过 |
-| 单元测试 | `pnpm test` | **38 passed / 0 failed** |
+| 单元测试 | `pnpm test` | **43 passed / 0 failed** |
 | 服务端渲染冒烟 | `pnpm render-smoke` | 通过；Settings 7629B、Overlay 7241B、PopupApp 7814B |
 | 客户端加载冒烟 | 临时 Node VM mock `window.__ModuleLoader__` + `react`/`react-dom` | 通过；`inject = slots,locale,sessions,uiSession`；注册 `shell.overlay/notify-interactive.overlay` 与 `settings.section/notify-interactive` |
 | 静态禁入包 | `grep dsh-client-ui-primitives lib/client.js` | 无匹配 |
@@ -34,7 +34,7 @@
   - `shell.overlay` occupants 出现 `notify-interactive.overlay`（order 100）。**刷新后复查 active true**，说明 Client 模块已加载且 Overlay 正常挂载。
 - 页面需要刷新以加载新的 client bundle（当前会话没有 `pnpm run dev:web` watcher）。
 - GitHub：<https://github.com/wuqiuwangtian/dsh-notify-interactive>
-- Release：<https://github.com/wuqiuwangtian/dsh-notify-interactive/releases/tag/v0.1.3>（附 `dsh-notify-interactive-0.1.3.tgz`）
+- Release：<https://github.com/wuqiuwangtian/dsh-notify-interactive/releases/tag/v0.1.4>（附 `dsh-notify-interactive-0.1.4.tgz`）
 
 ## 3. 用户手工验收清单
 

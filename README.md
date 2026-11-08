@@ -32,7 +32,7 @@
 
 ## 状态
 
-- 版本：`0.1.3`（第一阶段）
+- 版本：`0.1.4`（第一阶段）
 - 目标 DSH：`0.2.2-rc.1` 线（Web profile）
 - 已实现：音效 / 弹窗 / 系统通知三通道、审批/提问/计划审核/完成卡片、设置页、测试卡片
 - 第二阶段：按场景分别开关/选音效、完成原因细分、按会话静音、多标签页去重、可选原生 toast
@@ -47,10 +47,10 @@ dsh plugin --profile web add https://github.com/wuqiuwangtian/dsh-notify-interac
 
 ### 从 Release 安装
 
-下载 `dsh-notify-interactive-0.1.3.tgz` 后：
+下载 `dsh-notify-interactive-0.1.4.tgz` 后：
 
 ```sh
-dsh plugin --profile web add ./dsh-notify-interactive-0.1.3.tgz
+dsh plugin --profile web add ./dsh-notify-interactive-0.1.4.tgz
 ```
 
 ### 本地开发安装
@@ -113,6 +113,20 @@ DSH Web Client
 - 不监听 `approval/request` / `user-questions/request` waterfall，不改变 DSH 原有审批链。
 - 弹窗与主页面共享同一 JS 运行时，所以能直接调用 DSH 已经创建的 `PendingApproval` / `PendingQuestion` 对象；这就是“在弹窗里操作和网页一样”的原因。
 - Host 半边不注册服务、不写配置、不碰 session log。
+
+## 提醒表面规则
+
+| 页面状态 | 外部交互弹窗 | 页内卡片 | Windows 通知 | 音效 |
+|---|---|---|---|---|
+| 聚焦/可见，当前会话 | — | DSH 自带审批/提问/turn-tail | 否 | 否 |
+| 聚焦/可见，其他会话 | 已打开：显示卡片 | 弹窗打开时隐藏 | 否（避免重复） | 是 |
+| 聚焦/可见，其他会话 | 未打开 | 显示 | 否（避免重复） | 是 |
+| 失焦/隐藏 | 已打开：显示卡片 | 隐藏（保留记录） | 否（避免两个外部提醒） | 是 |
+| 失焦/隐藏 | 未打开 | 回来后可看到 | 是 | 是 |
+
+- **外部交互弹窗不能由后台事件自动打开**：浏览器只允许用户手势打开 `window.open` / Document PiP。打开一次并保持即可；关闭后由 Windows 通知和页内卡片接管。
+- **Windows 通知是“页面不在前台”时的自动外部提醒**；页面聚焦时不再发送，避免和页内卡片重复。
+- 页内卡片不是多余的：页面聚焦且弹窗未打开时，它是可点击回到会话的主要表面；页面失焦时，它保留为回来后的记录。
 
 ## 已知边界
 

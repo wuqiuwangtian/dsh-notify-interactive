@@ -32,7 +32,7 @@ It never answers for you: every decision requires an explicit click.
 
 ## Status
 
-- Version `0.1.3` (phase 1), DSH `0.2.2-rc.1` line, Web profile.
+- Version `0.1.4` (phase 1), DSH `0.2.2-rc.1` line, Web profile.
 - Phase 2: per-scenario toggles/sounds, turn-end reason, per-session mute, multi-tab leader election, optional native toast.
 
 ## Install
@@ -44,7 +44,7 @@ dsh plugin --profile web add https://github.com/wuqiuwangtian/dsh-notify-interac
 or install the release tarball:
 
 ```sh
-dsh plugin --profile web add ./dsh-notify-interactive-0.1.3.tgz
+dsh plugin --profile web add ./dsh-notify-interactive-0.1.4.tgz
 ```
 
 Refresh the DSH page after installing. The Host half is an empty `apply()`; the browser half loads with the page.
@@ -95,6 +95,20 @@ Notification Engine (baseline, dedupe, gates, "do not disturb")
 The popup shares the page's JS runtime, so it calls the same `PendingApproval` / `PendingQuestion` objects the DSH page already created. That is why answering in the popup behaves like answering in the page.
 
 It does not register a waterfall listener, does not change the approval chain, and does not write the session log.
+
+## Surface rules
+
+| Page state | Interactive popup | In-page card | Windows notification | Sound |
+|---|---|---|---|---|
+| Focused/visible, current session | — | DSH's own approval/question/turn UI | No | No |
+| Focused/visible, another session | Open: card shown | Hidden while popup owns the surface | No (avoid duplicate) | Yes |
+| Focused/visible, another session | Closed | Shown | No (avoid duplicate) | Yes |
+| Unfocused/hidden | Open: card shown | Hidden (retained as a record) | No (avoid two outside alerts) | Yes |
+| Unfocused/hidden | Closed | Visible when you return | Yes | Yes |
+
+- **The detached popup cannot be opened by a background event**: browser security only allows `window.open` / Document PiP from a user gesture. Open it once and keep it open; after closing, the Windows notification and in-page card take over.
+- **The Windows notification is the automatic outside alert when the page is not in front**; it is suppressed while the page is focused to avoid duplicating the in-page card.
+- The in-page card is not redundant: when the page is focused and the popup is closed, it is the clickable primary surface; when you are away, it remains as a record for your return.
 
 ## Limitations
 
