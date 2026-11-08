@@ -79,18 +79,19 @@ export function createEngine(options) {
   }
 
   function playSound(settings) {
-    if (settings.sound.enabled === false) return
-    if (settings.sound.preset === 'none') return
-    soundPlayer?.play?.(settings.sound.preset, settings.sound.volume)
+    if (settings.sound.enabled === false) return false
+    if (settings.sound.preset === 'none') return false
+    return soundPlayer?.play?.(settings.sound.preset, settings.sound.volume) === true
   }
 
-  function deliverWindows(kind, sessionId, sessionTitle, title, body) {
+  function deliverWindows(kind, sessionId, sessionTitle, title, body, silent) {
     onWindowsFallback?.({
       kind,
       sessionId,
       sessionTitle,
       title,
       body,
+      silent: silent === true,
     })
   }
 
@@ -117,7 +118,7 @@ export function createEngine(options) {
     })
     if (!gate.sound && !gate.notify) return
 
-    if (gate.sound) playSound(settings)
+    const soundPlayed = gate.sound ? playSound(settings) : false
     if (!gate.notify) return
 
     if (isPopupOpen()) {
@@ -133,7 +134,7 @@ export function createEngine(options) {
       })
       return
     }
-    deliverWindows(kind, sessionId, sessionTitle, fallbackTitle(kind), interactionBody(interaction, sessionTitle))
+    deliverWindows(kind, sessionId, sessionTitle, fallbackTitle(kind), interactionBody(interaction, sessionTitle), soundPlayed)
   }
 
   function handleCompletion(event, settings, sessionList, mainSessionId) {
@@ -156,7 +157,7 @@ export function createEngine(options) {
 
     completionCooldown.set(sessionId, timestamp)
     const sessionTitle = sessionTitleOf(sessionList, sessionId)
-    if (gate.sound) playSound(settings)
+    const soundPlayed = gate.sound ? playSound(settings) : false
     if (!gate.notify) return
 
     if (isPopupOpen()) {
@@ -183,6 +184,7 @@ export function createEngine(options) {
       sessionTitle,
       fallbackTitle('completion'),
       truncate([sessionTitle, t('notify.completion.body')].filter(Boolean).join(' · ')),
+      soundPlayed,
     )
   }
 

@@ -16,7 +16,7 @@ import { messageForEvent, shouldAutoNotify, truncate } from './logic.js'
 const PRESENCE_PATH = '/dsh-notify-interactive/presence'
 const WINDOWS_PATH = '/dsh-notify-interactive/windows-notify'
 const WSL_POWERSHELL = '/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe'
-const POPUP_SCRIPT = "$ErrorActionPreference='SilentlyContinue'; [System.Media.SystemSounds]::Asterisk.Play(); $shell = New-Object -ComObject WScript.Shell; $null = $shell.Popup($env:DSH_NOTIFY_BODY, 300, $env:DSH_NOTIFY_TITLE, 64)"
+const POPUP_SCRIPT = "$ErrorActionPreference='SilentlyContinue'; if ($env:DSH_NOTIFY_SILENT -ne '1') { [System.Media.SystemSounds]::Asterisk.Play() }; $shell = New-Object -ComObject WScript.Shell; $null = $shell.Popup($env:DSH_NOTIFY_BODY, 300, $env:DSH_NOTIFY_TITLE, 64)"
 const NOTIFY_COOLDOWN_MS = 2000
 
 let warnedMissingPowerShell = false
@@ -28,7 +28,7 @@ function resolvePowerShell() {
 }
 
 /** Show one Windows dialog. The process is detached so the host never waits. */
-function showWindowsPopup(title, body) {
+function showWindowsPopup(title, body, silent = false) {
   const executable = resolvePowerShell()
   if (executable === undefined) {
     if (!warnedMissingPowerShell) {
@@ -51,6 +51,7 @@ function showWindowsPopup(title, body) {
         ...process.env,
         DSH_NOTIFY_TITLE: truncate(title, 80),
         DSH_NOTIFY_BODY: truncate(body, 500),
+        DSH_NOTIFY_SILENT: silent ? '1' : '0',
       },
     })
     child.on('error', () => {})
@@ -102,7 +103,7 @@ export function apply(ctx) {
   let lastPresence = null
   const lastNotify = new Map()
 
-  function notifyOnce(sessionId, kind, title, body) {
+  function notifyOnce(sessionId, kind, title, body, silent = false) {
     const now = Date.now()
     const key = `${sessionId}:${kind}`
     const last = lastNotify.get(key)
@@ -113,7 +114,7 @@ export function apply(ctx) {
         if (now - at > 10 * 60 * 1000) lastNotify.delete(entryKey)
       }
     }
-    return showWindowsPopup(title, body)
+    return showWindowsPopup(title, body, silent)
   }
 
   async function presenceRoute(req, res) {
@@ -151,7 +152,7 @@ export function apply(ctx) {
       const kind = typeof body?.kind === 'string' ? body.kind : 'notice'
       const title = truncate(body?.title ?? 'DSH', 80)
       const text = truncate(body?.body ?? '', 500)
-      const shown = notifyOnce(sessionId, kind, title, text)
+      const shown = notifyOnce(sessionId, kind, title, text, body?.silent === true)
       writeJson(res, 200, { shown })
     } catch {
       res.writeHead(400)
