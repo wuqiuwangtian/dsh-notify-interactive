@@ -54,6 +54,8 @@ The same package works in CLI/TUI profiles; the host half takes over when no Web
 
 Refresh the DSH page after installing. The Web popup must be opened once; CLI/TUI needs no window.
 
+> Upgrading from 0.1.x to 0.2.0 adds the host Windows fallback and presence routes, so restart the DSH process once; later updates only need a page refresh.
+
 ## First run
 
 1. Refresh DSH.
