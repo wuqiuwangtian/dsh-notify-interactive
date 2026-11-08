@@ -1,9 +1,12 @@
 /**
  * Synthesized notification sounds.
  *
- * No audio files are shipped: every preset is a short Web Audio envelope, so
- * the plugin has no asset licensing surface and works offline.
+ * Web Audio is the primary path. A generated WAV data URL is the fallback for
+ * environments where the AudioContext cannot resume (autoplay policy, WebView
+ * audio restrictions, or a missing AudioContext). No audio files are fetched.
  */
+
+import { renderPresetToDataUrl } from './wav.js'
 
 /** Built-in presets. `none` is intentionally silent. */
 export const SOUND_PRESETS = Object.freeze([
@@ -46,6 +49,7 @@ export const SOUND_PRESETS = Object.freeze([
 ])
 
 const THROTTLE_MS = 300
+const wavCache = new Map()
 
 /** Clamp a user volume to the supported 0–1 range. */
 export function clampVolume(value) {
@@ -61,7 +65,7 @@ export function getPreset(id) {
 /**
  * Create the sound player.
  * @param {{ audioContextFactory?: () => AudioContext | null, now?: () => number }} [options]
- * @returns player handle; every method is safe to call when Web Audio is unavailable.
+ * @returns player handle; every method is safe to call when audio is unavailable.
  */
 export function createSoundPlayer(options = {}) {
   const audioContextFactory = options.audioContextFactory
@@ -75,7 +79,7 @@ export function createSoundPlayer(options = {}) {
         try {
           audio.resume?.()
         } catch {
-          // A rejected resume is handled by the next user gesture.
+          // The next user gesture or the WAV fallback handles it.
         }
       }
       return audio
@@ -92,22 +96,7 @@ export function createSoundPlayer(options = {}) {
     return audio
   }
 
-  function play(presetId, volume) {
-    const preset = getPreset(presetId)
-    if (preset.notes.length === 0) return false
-    const timestamp = now()
-    if (timestamp - lastPlayedAt < THROTTLE_MS) return false
-    lastPlayedAt = timestamp
-    const context = ensureContext()
-    if (context === null || context === undefined) return false
-    if (context.state === 'suspended') {
-      try {
-        context.resume?.()
-      } catch {
-        // Playback still works after the next activation.
-      }
-    }
-    const level = clampVolume(volume)
+  function schedule(context, preset, level) {
     const startAt = context.currentTime + 0.01
     for (const note of preset.notes) {
       const oscillator = context.createOscillator()
@@ -123,13 +112,92 @@ export function createSoundPlayer(options = {}) {
       oscillator.start(startAt + note.start)
       oscillator.stop(startAt + note.start + note.duration + 0.03)
     }
+  }
+
+  async function playViaAudioElement(preset, volume) {
+    if (typeof globalThis.Audio !== 'function') return false
+    let url = wavCache.get(preset.id)
+    if (url === undefined) {
+      url = renderPresetToDataUrl(preset)
+      wavCache.set(preset.id, url)
+    }
+    if (url === '') return false
+    try {
+      const element = new globalThis.Audio(url)
+      element.volume = clampVolume(volume)
+      await element.play()
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  function play(presetId, volume) {
+    const preset = getPreset(presetId)
+    if (preset.notes.length === 0) return false
+    const timestamp = now()
+    if (timestamp - lastPlayedAt < THROTTLE_MS) return false
+    lastPlayedAt = timestamp
+    const level = clampVolume(volume)
+    const context = ensureContext()
+    if (context !== null && context !== undefined) {
+      if (context.state === 'running') {
+        schedule(context, preset, level)
+        return true
+      }
+      try {
+        const resumed = context.resume?.()
+        if (resumed !== undefined && typeof resumed.then === 'function') {
+          resumed.then(() => {
+            if (context.state === 'running') schedule(context, preset, level)
+            else void playViaAudioElement(preset, level)
+          }).catch(() => {
+            void playViaAudioElement(preset, level)
+          })
+        } else {
+          schedule(context, preset, level)
+        }
+        return true
+      } catch {
+        // Fall through to the WAV element.
+      }
+    }
+    if (typeof globalThis.Audio !== 'function') return false
+    void playViaAudioElement(preset, level)
     return true
+  }
+
+  /**
+   * Preview one preset and report the path that was used.
+   * @returns {'played' | 'fallback' | 'silent' | 'blocked' | 'unsupported'}
+   */
+  async function preview(presetId, volume) {
+    const preset = getPreset(presetId)
+    if (preset.notes.length === 0) return 'silent'
+    const level = clampVolume(volume)
+    const context = ensureContext()
+    if (context !== null && context !== undefined) {
+      try {
+        if (context.state === 'suspended') await context.resume?.()
+        if (context.state === 'running') {
+          schedule(context, preset, level)
+          return 'played'
+        }
+      } catch {
+        // Fall through to the WAV element.
+      }
+    }
+    if (typeof globalThis.Audio !== 'function') {
+      return context !== null && context !== undefined ? 'blocked' : 'unsupported'
+    }
+    const played = await playViaAudioElement(preset, level)
+    return played ? 'fallback' : 'blocked'
   }
 
   return {
     presets: SOUND_PRESETS,
     play,
-    preview: play,
+    preview,
     unlock: ensureContext,
     isReady: () => audio !== null && audio.state === 'running',
   }

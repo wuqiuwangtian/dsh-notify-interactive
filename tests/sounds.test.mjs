@@ -6,6 +6,7 @@ import {
   createSoundPlayer,
   getPreset,
 } from '../src/audio/sounds.js'
+import { renderPresetToDataUrl } from '../src/audio/wav.js'
 
 function fakeAudioContext() {
   const created = []
@@ -74,6 +75,28 @@ test('player synthesizes notes, throttles bursts, and ignores silence', () => {
   nowValue += 301
   assert.equal(player.play('pulse', 0.5), true)
   assert.equal(fake.created.length, 4)
+})
+
+test('preview reports the playback path', async () => {
+  const fake = fakeAudioContext()
+  const player = createSoundPlayer({
+    audioContextFactory: () => fake.context,
+    now: () => 1_000,
+  })
+  assert.equal(await player.preview('chime', 0.5), 'played')
+  assert.equal(await player.preview('none', 0.5), 'silent')
+  const unavailable = createSoundPlayer({
+    audioContextFactory: () => null,
+    now: () => 1_000,
+  })
+  assert.equal(await unavailable.preview('chime', 0.5), 'unsupported')
+})
+
+test('WAV fallback renders a playable data URL', () => {
+  const url = renderPresetToDataUrl(getPreset('chime'))
+  assert.match(url, /^data:audio\/wav;base64,/)
+  assert.ok(url.length > 1000)
+  assert.equal(renderPresetToDataUrl(getPreset('none')), '')
 })
 
 test('player degrades when Web Audio is unavailable', () => {

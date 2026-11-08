@@ -35,9 +35,11 @@ export function Settings() {
   const storeStatus = runtime.settingsStore.getStatus()
   const [permission, setPermission] = useState(() => runtime.systemNotifier?.permission?.() ?? 'unsupported')
   const [audioReady, setAudioReady] = useState(() => runtime.soundPlayer?.isReady?.() ?? false)
+  const [previewStatus, setPreviewStatus] = useState(null)
   const [resetDone, setResetDone] = useState(false)
 
   useEffect(() => {
+    setPreviewStatus(null)
     setAudioReady(runtime.soundPlayer?.isReady?.() ?? false)
   }, [settings.sound.enabled, settings.sound.preset])
 
@@ -59,9 +61,18 @@ export function Settings() {
       ? 'Window'
       : 'Inpage'}`)
 
-  function previewSound() {
-    runtime.previewSound(settings.sound.preset, settings.sound.volume)
-    setAudioReady(runtime.soundPlayer?.isReady?.() ?? false)
+  async function previewSound() {
+    try {
+      const result = await runtime.previewSound(settings.sound.preset, settings.sound.volume)
+      setPreviewStatus(result)
+      setAudioReady(
+        result === 'played'
+        || result === 'fallback'
+        || (runtime.soundPlayer?.isReady?.() ?? false),
+      )
+    } catch {
+      setPreviewStatus('blocked')
+    }
   }
 
   async function authorize() {
@@ -89,9 +100,7 @@ export function Settings() {
 
   function addDemo(kind) {
     runtime.addDemo(kind, { sessionId: mainSessionId, sessionTitle: mainTitle })
-    if (kind !== 'completion') {
-      openPopup()
-    }
+    openPopup()
   }
 
   function reset() {
@@ -160,6 +169,23 @@ export function Settings() {
             onChange: (value) => update({ sound: { volume: value } }),
           }),
           h(Button, { variant: 'outline', size: 'sm', onClick: previewSound }, t('settings.preview')),
+          previewStatus === null
+            ? null
+            : h(Badge, {
+              tone: previewStatus === 'played' || previewStatus === 'fallback'
+                ? 'success'
+                : previewStatus === 'silent'
+                  ? 'neutral'
+                  : 'danger',
+            }, t(`settings.preview${previewStatus === 'played'
+              ? 'Played'
+              : previewStatus === 'fallback'
+                ? 'Fallback'
+                : previewStatus === 'silent'
+                  ? 'Silent'
+                  : previewStatus === 'unsupported'
+                    ? 'Unsupported'
+                    : 'Blocked'}`)),
         ),
       ),
     ),

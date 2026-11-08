@@ -6,12 +6,14 @@ import { CardButton, CardShell } from './shared.jsx'
 export function CompletionCard({ item, t, onOpenSession, onDismiss, settings }) {
   const [paused, setPaused] = useState(false)
   const autoDismissMs = settings?.behavior?.completionAutoDismissMs ?? 8000
+  // A demo card is a test surface, so keep it until the user closes it.
+  const effectiveAutoDismissMs = item.demo === true ? 0 : autoDismissMs
 
   useEffect(() => {
-    if (paused || !(autoDismissMs > 0)) return undefined
-    const timer = setTimeout(() => onDismiss?.(item.id), autoDismissMs)
+    if (paused || !(effectiveAutoDismissMs > 0)) return undefined
+    const timer = setTimeout(() => onDismiss?.(item.id), effectiveAutoDismissMs)
     return () => clearTimeout(timer)
-  }, [autoDismissMs, item.id, onDismiss, paused])
+  }, [effectiveAutoDismissMs, item.id, onDismiss, paused])
 
   return h(CardShell, {
     tone: 'success',
