@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "互动提醒",
-    "description": "在权限审批、提问、计划审核和任务完成时，用音效、DSH 风格置顶弹窗和 Windows 系统通知提醒你。"
+    "title": "\u4e92\u52a8\u63d0\u9192",
+    "description": "\u805a\u7126\u5f53\u524d\u4f1a\u8bdd\u65f6\u4e0d\u6253\u6270\uff1b\u5426\u5219\u4f7f\u7528 DSH \u98ce\u683c\u4ea4\u4e92\u5f39\u7a97\uff0c\u5f39\u7a97\u6216 Web UI \u4e0d\u53ef\u7528\u65f6\u81ea\u52a8\u6539\u7528 Windows \u5f39\u7a97\u63d0\u9192\u3002"
   }
 }

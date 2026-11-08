@@ -1,131 +1,146 @@
 # 需求文档（唯一权威）
 
 > 项目：`dsh-notify-interactive`
-> 阶段：第一阶段已实现（0.1.4）；第二阶段待排期
-> 目标宿主：DSH Web `0.2.2-rc.1` 线，`web` profile
+> 阶段：第一阶段重构完成（0.2.0）；第二阶段待排期
+> 目标宿主：DSH `0.2.2-rc.1` 线；Web / CLI / TUI profile
 
-## 1. 原始要求
+## 1. 原始要求与重构决定
 
-来自用户：
+最初的用户要求：
 
-1. 在本目录新建项目仓库，制作一个 dsh-web 的提醒功能插件，类似 Codex Desktop。
-2. UI 与 DSH 风格保持一致。
-3. 在会话申请权限、提问或任务完成时提醒用户。
-4. 可以选择音效、Windows 弹窗，或两者都有。
-5. 如果弹窗，弹窗中要能进行选择和自定义回答（和在 web 中操作一样）。
-6. 任务完成要能点击回到对话。
-7. 音效和弹窗要能分别关闭/开启。
-8. 第一阶段以上要求；后续最好能分辨不同场景，分别选择不同场景下的开启/关闭。
-9. MIT 协议，自建 GitHub 仓库发布，做好 Git 版本控制。
-10. 若已有完全符合要求的活跃项目，则不开发，直接安装。
+1. dsh-web 提醒插件，类似 Codex Desktop；
+2. 覆盖权限审批、提问、任务完成；
+3. 音效 / Windows 弹窗可选；
+4. 弹窗内可选择、可自定义回答；
+5. 完成提醒可点击回到对话；
+6. 音效和弹窗分别开关；
+7. 后续按场景分别开关；
+8. MIT、自建 GitHub 仓库、Git 版本控制；
+9. 若已有完全符合的活跃项目则直接安装。
 
-## 2. 调研结论
+2026-11-08 用户明确重构：
 
-没有找到完全符合的活跃项目。详见 [research.md](research.md)。最接近的 `dsh-popup-notify` 的弹窗不可交互；`dsh-approval-popup` 只支持审批；`dsh-reminder` 弹窗不能作答；`dsh-notifier` 是手机端通道；`deepseek-harness-desktop` 是桌面 App。因此继续开发。
+- **删除页内通知卡片**；
+- 只区分“是否聚焦当前会话”：聚焦 → 什么都不做；
+- 不聚焦 → 优先自绘交互弹窗；
+- 弹窗条件不允许（如无 GUI 的终端环境）→ Windows 弹窗提醒；
+- Windows 兜底只能提醒，不能选择/填写回答；
+- 该逻辑要兼容 Web UI、CLI、TUI；
+- 自绘弹窗 UI 与 DSH 一致且极简：删掉不影响操作的内容。
 
-## 3. 第一阶段范围
+重构后的第一阶段边界以本文档为准，早期“页内卡片 / 浏览器 Notification / 弹窗开关”等要求已废弃。
 
-### 3.1 事件
+## 2. 第一阶段范围
 
-| 事件 | 判定源 | 说明 |
+### 2.1 事件
+
+| 事件 | 判定 | 说明 |
 |---|---|---|
-| 权限审批 | `uiSession.sessionStatus` 中 `pendingInteraction.kind === 'approval'` | 工具/沙箱审批 |
-| 提问 | `pendingInteraction.kind === 'question'` | `ask_user_question` |
-| 计划审核 | `pendingInteraction.kind === 'plan-review'` | `exit_plan_mode` 等 |
-| 任务完成 | `running: true → false`；非当前会话的 `completionUnread` 兜底 | 第一阶段统一文案 |
+| 权限审批 | `pendingInteraction.kind === 'approval'`（Web）；宿主 `approval/asked` | 工具/沙箱审批 |
+| 提问 | `pendingInteraction.kind === 'question'`（Web）；宿主 `tool/call(ask_user_question)` | 需要结构化回答 |
+| 计划审核 | `pendingInteraction.kind === 'plan-review'`（Web）；宿主 `tool/call(exit_plan_mode)` | 计划批准/拒绝 |
+| 任务完成 | `running: true → false`（Web）；宿主 `turn/end` | 完成/出错/超长/阻塞；用户主动中断跳过 |
 
-### 3.2 通道
+### 2.2 静默规则
 
-| 通道 | 实现 | 独立开关 |
-|---|---|---|
-| 音效 | Web Audio 合成 6 个预设 | 是 |
-| 交互弹窗 | Document PiP → `window.open` → 页内浮层 | 是 |
-| Windows 系统通知 | 浏览器 Notification API | 是 |
+唯一静默条件：**页面聚焦、可见，且事件属于当前主视图会话**。
 
-### 3.3 弹窗内操作
+- 满足 → 不播放音效、不显示弹窗、不发 Windows 提醒；
+- 当前会话由 DSH 自带的审批/提问/turn-tail 处理，插件不重复。
 
-- 审批：允许一次 / 拒绝；不提供“始终允许”；不自动超时选择。
-- 提问：单选、多选、自定义文本、跳过；提交结构化 `{ answers: [...] }`。
-- 计划审核：纯文本预览、批准、拒绝、“在 DSH 中查看完整计划”。
-- 完成：显示会话标题、回到对话、关闭；可自动关闭。
-- 同一会话只显示最高优先级 pending interaction（与 DSH 一致）。
+### 2.3 投递优先级
 
-### 3.4 不打扰与提醒表面
+| 场景 | 行为 |
+|---|---|
+| 聚焦当前会话 | 静默 |
+| Web，其他会话 / 页面失焦 | 交互弹窗已打开 → 弹窗卡片；未打开 → 宿主 Windows 弹窗 |
+| Web 页面关闭 | Web presence 过期 → 宿主 Windows 弹窗 |
+| CLI/TUI | 无 Web presence → 宿主 Windows 弹窗 |
 
-- 页面聚焦、可见，且正在看该会话 → 跳过该会话的提醒（可关）。
-- 页面聚焦、可见，但事件属于其他会话 → 页内卡片 + 音效；**不发 Windows toast**，避免重复。
-- 页面失焦/隐藏：
-  - 外部交互弹窗已打开 → 弹窗显示卡片 + 音效；**不发 Windows toast**。
-  - 外部交互弹窗未打开 → **Windows toast + 音效**；页内卡片保留为回来后的记录。
-- 外部交互弹窗必须由一次用户点击打开并保持；浏览器不允许后台事件自动打开新窗口。
-- 页内卡片在页面聚焦且弹窗未打开时是主要可点击表面；不是冗余。
-- 子智能体会话默认跳过（可开）。
-- 刷新/重连只建立基线，不重放已有请求。
-- 同一触发 2 秒内去重。
+- Web 交互弹窗必须由用户点击打开一次并保持；浏览器不允许后台事件自动开新窗口。
+- 宿主 Windows 弹窗是**只读提醒**，不能作答；用户回到 DSH/终端处理。
+- 音效是独立可选项；Windows 兜底自带系统提示音。
+- 宿主只观察 `session/event`，不监听 approval/question waterfall，不改变审批链。
 
-### 3.5 设置
+### 2.4 弹窗 UI
 
-见 README 设置表。设置存 localStorage；不写 profile。
+目标：DSH 风格、极简、只保留操作必需内容。
 
-### 3.6 交付
+- 卡片：标题、必要上下文（工具/问题/计划）、会话入口、操作按钮/输入；
+- 不显示：图标、装饰性副标题、后端徽标、页脚说明、权限状态等非操作内容；
+- 完成卡：标题 + 会话入口 + “回到对话 / 关闭”；自动关闭 8 秒（演示卡常驻）；
+- 提问卡：选项、自定义输入、跳过、提交；计时题显示倒计时与“慢慢回答”；
+- 计划卡：纯文本预览、批准/拒绝、在 DSH 查看；
+- 空状态：“暂无提醒”。
 
-- MIT LICENSE。
-- GitHub 仓库 `wuqiuwangtian/dsh-notify-interactive`。
-- `v0.1.4` Release + tgz。
-- 安装到当前 `web` profile。
-- 单元测试、CI、README/AGENTS/需求/调研/验证文档。
+### 2.5 设置
 
-## 4. 非目标（第一阶段）
+- 启用提醒；
+- 音效开关、预设、音量、试听；
+- 打开/关闭弹窗；测试弹窗；
+- 测试 Windows 提醒；
+- 测试审批/提问/完成卡；
+- 恢复默认。
 
-- 按场景分别开关/选音效（第二阶段；数据模型已预留）。
-- 完成原因细分（completed/error/aborted）。
-- 原生 WinRT toast 独立于浏览器。
-- 在弹窗内编辑计划、渲染完整 Markdown。
-- 多标签页领导选举。
-- 从 profile 配置同步设置。
-- 自动批准/自动拒绝。
+设置存浏览器 localStorage（`dsh.notify-interactive.settings.v2`）。宿主 Windows 兜底无需浏览器通知权限。
 
-## 5. 验收标准
+### 2.6 跨环境
 
-1. 安装并刷新后，设置出现“互动提醒”页，包含三通道开关、音效选择/音量/试听、弹窗打开/测试、通知授权/测试、行为选项、测试卡片。
-2. 真实审批且页面不在前台：按开关触发音效、系统通知、置顶弹窗；弹窗内允许/拒绝后审批被解决。
-3. 真实提问：弹窗内单选/多选/自定义/跳过均可提交，Agent 收到结构化答案；计划审核可批准/拒绝。
-4. 完成：弹窗显示完成卡；点“回到对话”打开对应会话。
-5. 三通道独立开关。
-6. 弹窗关闭后页内浮层接管；重开不重复。
-7. 刷新/重连不重放旧提醒。
-8. 明暗主题、中英文跟随；无 slot crash；不 import 宿主内部 Client 包。
-9. 页面聚焦且弹窗未打开时：其他会话完成只出现页内卡片 + 音效，不出现 Windows toast。
-10. 页面失焦/隐藏且弹窗未打开时：出现 Windows toast；弹窗已打开时只出现弹窗卡片。
-9. `pnpm verify` 通过；CI 通过。
-10. GitHub 仓库公开、MIT、Release 齐全；插件已装入 web profile。
+- Web：Client 上报 presence；引擎决定静默/弹窗/宿主兜底。
+- CLI/TUI：Host 无 Web presence，直接 Windows 兜底。
+- Host 与 Client 在同一包；CLI/TUI 不加载 Client。
+- Windows 兜底路径：Windows `powershell.exe`；WSL `/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe`。
 
-## 6. 第二阶段建议
+## 3. 非目标（第一阶段）
 
-1. 设置页开放 `scenarios`：审批 / 提问 / 计划审核 / 完成 / 错误，各自音效、弹窗、系统通知开关与音效预设。
-2. Host session projection 提供 `turn/end.reason` 与回复预览；完成卡区分正常/出错/中断/超长。
-3. 按会话静音、主线/支线优先级、重复提醒间隔。
-4. 自定义音频文件/URL。
-5. 多标签页 BroadcastChannel 领导选举。
-6. 可选 Host 原生 toast（WSL → Windows PowerShell/WinRT），浏览器关闭时也能提醒。
-7. 设置迁移到 profile 配置，跨浏览器同步。
+- 页内通知卡片（已删除，不要恢复）。
+- 浏览器 Notification 通道与通知权限 UI（已删除）。
+- 自动打开外部弹窗。
+- 自动批准/拒绝/回答。
+- Windows 兜底内作答。
+- 多标签页 leader 选举。
+- 完成原因的 Web 端细分（宿主 Windows 文案已区分；Web 卡统一“本轮已结束”）。
+- 跨浏览器/设备设置同步。
 
-## 7. 关键决策与理由
+## 4. 验收标准
+
+1. 设置页出现“互动提醒”，包含总开关、音效、弹窗打开/测试、Windows 提醒测试、三类测试卡、恢复默认。
+2. Web 聚焦当前会话：审批/提问/完成均不产生插件音效、弹窗、Windows 提醒。
+3. Web 聚焦其他会话或页面失焦，弹窗已打开：弹窗显示卡片，可在弹窗内作答；不弹 Windows。
+4. 同上但弹窗关闭：宿主弹 Windows 提醒；点“测试 Windows 提醒”可验证。
+5. 关闭 DSH 页面（或 CLI/TUI）：宿主观察事件并弹 Windows 提醒。
+6. 完成卡“回到对话”打开对应会话。
+7. 弹窗 UI 极简：无图标/副标题/后端徽标/页脚等非操作内容。
+8. 语言跟随 DSH：`zh` / `zh-CN` / `zh-TW` → 中文，其他 → 英文。
+9. `pnpm verify` 通过；构建产物与源码一致。
+10. GitHub 公开、MIT、Release 齐全；插件已装入 web profile。
+
+## 5. 第二阶段建议
+
+1. 按场景分别开关/选音效（数据模型已预留 `scenarios`）。
+2. 宿主 session projection 提供完成原因与回复预览；Web 完成卡区分。
+3. 多标签页 BroadcastChannel leader 选举，避免多个 Web 面重复投递。
+4. 按会话静音、主线/支线优先级、重复提醒间隔。
+5. 可选原生 Windows toast（非模态、可点击），替代/补充 `WScript.Shell.Popup`。
+6. 设置从 localStorage 迁移到 profile 配置，跨浏览器同步。
+
+## 6. 关键决策
 
 | 决策 | 理由 |
 |---|---|
-| Client-only，Host 空 | pending interaction 对象在浏览器；同 JS 运行时才能直接作答；避免抢 waterfall |
-| 观察 `sessionStatus` 而非 `approval/request` | 不改变审批链；与侧栏状态同源；可覆盖提问 |
-| Document PiP 优先 | 唯一能同时做到“始终置顶 + DSH 风格 + 可交互”的浏览器能力 |
-| 浏览器 Notification 作系统通知 | 无需 Host 原生依赖；Windows 上进入通知中心；点击可回会话 |
-| localStorage 设置 | 第一阶段无 Host RPC；按浏览器保存合理 |
-| 页面内浮层兜底 | 弹窗被拦截/关闭时不丢失作答入口 |
-| 本地合成音效 | 无版权/素材问题；离线可用 |
+| 删除页内卡片 | 用户明确不需要；减少表面与重复 |
+| 只按“聚焦当前会话”静默 | 规则简单、与用户预期一致 |
+| Web 优先交互弹窗 | 可作答；DSH 风格；始终置顶 |
+| 弹窗不可用 → 宿主 Windows | 浏览器不能后台开窗；CLI/TUI 无 Web |
+| 宿主只读 session 事件 | 不抢 waterfall、不改变审批链；CLI/TUI 同样可观察 |
+| presence 路由 | Host 判断是否有 Web 面；避免 Web 与宿主重复提醒 |
+| Windows 兜底只读 | 用户接受；保持审批/回答必须由人显式操作 |
+| 极简弹窗 | 用户要求；只保留操作必需内容 |
 
-## 8. 风险
+## 7. 风险
 
-- Document PiP 在非 Chromium 不可用；回退普通弹窗/页内。
-- 浏览器通知权限被拒绝；系统通道不可用，其余通道正常。
-- 弹窗被浏览器拦截；需要用户点击一次；页内兜底。
-- 多标签页重复提醒；第二阶段解决。
-- 完成原因第一阶段不区分；第二阶段用 Host projection。
+- 浏览器限制导致弹窗必须手动打开一次；关闭后只能 Windows 兜底。
+- Windows 兜底依赖 PowerShell/桌面；无 GUI 或非 Windows 无兜底。
+- presence 心跳/`pagehide` 失败时，宿主最多 15 秒后才接管。
+- 多标签页可能重复投递；第二阶段解决。
+- Windows `WScript.Shell.Popup` 是模态系统对话框，可能抢焦点；20 秒自动关闭。

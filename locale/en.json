@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Interactive notifications",
-    "description": "Sound, an always-on-top DSH-styled popup, and Windows notifications for approvals, questions, plan reviews, and turn completion."
+    "description": "Stay silent while focused on the conversation; otherwise use the DSH-styled interactive popup, or a Windows popup reminder when the popup or a Web UI is unavailable."
   }
 }
