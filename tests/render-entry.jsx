@@ -85,11 +85,16 @@ const popupHtml = renderToStaticMarkup(h(PopupApp))
 
 runtime.ctx.locale.getLocale = () => ({ active: 'en', locales: [], revision: 1 })
 const settingsHtmlEn = renderToStaticMarkup(h(Settings))
+runtime.ctx.locale.getLocale = () => ({ active: 'zh', locales: [], revision: 2 })
+runtime.setSurface?.('popup')
+const overlayHiddenHtml = renderToStaticMarkup(h(Overlay))
+runtime.setSurface?.('inpage')
 
 const checks = [
   ['settings title', settingsHtml.includes('互动提醒')],
   ['settings sound section', settingsHtml.includes('音效')],
   ['settings english title', settingsHtmlEn.includes('Interactive notifications')],
+  ['overlay hidden while popup owns the surface', !overlayHiddenHtml.includes('需要你的批准')],
   ['overlay approval card', overlayHtml.includes('需要你的批准')],
   ['popup question card', popupHtml.includes('需要你的回答')],
   ['popup completion card', popupHtml.includes('本轮已结束')],

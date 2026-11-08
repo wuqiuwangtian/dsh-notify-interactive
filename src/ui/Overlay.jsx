@@ -14,11 +14,12 @@ export function Overlay() {
   const settings = useStore(runtime.settingsStore)
   const notifications = useStore(runtime.notificationStore)
   const popup = useStore(runtime.popupController)
+  const surface = useStore(runtime.surfaceStore)
   const { t } = useLocale(runtime.ctx)
 
   if (!settings?.enabled) return null
   if (!settings.popup.enabled) return null
-  if (popup?.open === true) return null
+  if (popup?.open === true || surface === 'popup') return null
 
   const maxVisible = Math.max(1, settings.behavior.maxVisibleCards)
   const visible = notifications.slice(-maxVisible)

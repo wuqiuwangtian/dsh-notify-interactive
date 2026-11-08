@@ -36,6 +36,8 @@ export function createPopupController(options = {}) {
   const sourceDocument = options.document ?? globalThis.document
   const css = options.css ?? POPUP_CSS
   const translate = options.translate ?? ((key) => key)
+  const onOpen = options.onOpen
+  const onClose = options.onClose
   const listeners = new Set()
 
   let win = null
@@ -43,6 +45,7 @@ export function createPopupController(options = {}) {
   let backend = 'inpage'
   let error = null
   let watchdog = null
+  let opening = false
   let snapshot = { open: false, backend, error }
 
   function isOpen() {
@@ -147,6 +150,7 @@ export function createPopupController(options = {}) {
       // React may already have disposed the detached root.
     }
     publish()
+    onClose?.()
   }
 
   async function open() {
@@ -158,6 +162,9 @@ export function createPopupController(options = {}) {
       }
       return snapshot
     }
+    if (opening) return snapshot
+    opening = true
+    try {
     error = null
     let candidate = null
     let nextBackend = 'inpage'
@@ -183,6 +190,7 @@ export function createPopupController(options = {}) {
       error = 'blocked'
       backend = 'inpage'
       publish()
+      onClose?.()
       return snapshot
     }
 
@@ -201,11 +209,16 @@ export function createPopupController(options = {}) {
       root = null
       backend = 'inpage'
       publish()
+      onClose?.()
       return snapshot
     }
     startWatch()
+    onOpen?.()
     publish()
     return snapshot
+    } finally {
+      opening = false
+    }
   }
 
   function close() {
@@ -226,6 +239,7 @@ export function createPopupController(options = {}) {
       // The OS may already have closed it.
     }
     publish()
+    onClose?.()
   }
 
   function focus() {

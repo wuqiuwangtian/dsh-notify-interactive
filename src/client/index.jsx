@@ -56,6 +56,8 @@ export function apply(ctx) {
     document: globalThis.document,
     css: POPUP_CSS,
     translate,
+    onOpen: () => runtime.setSurface('popup'),
+    onClose: () => runtime.setSurface('inpage'),
   })
 
   function openSession(sessionId) {
@@ -138,7 +140,7 @@ export function apply(ctx) {
     if (item !== undefined) notificationStore.upsert(item)
   }
   runtime.ready = true
-  runtime.version = '0.1.2'
+  runtime.version = '0.1.3'
   try {
     // Diagnostics/support handle; the settings page is the normal entry point.
     globalThis.__dshNotifyInteractive = runtime

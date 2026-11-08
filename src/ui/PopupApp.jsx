@@ -1,4 +1,4 @@
-import { createElement as h } from 'react'
+import { createElement as h, useEffect } from 'react'
 import { runtime } from '../client/runtime.js'
 import { PopupIcon, CloseIcon } from './icons.jsx'
 import { IconButton } from './controls.jsx'
@@ -18,6 +18,12 @@ export function PopupApp() {
   const settings = useStore(runtime.settingsStore)
   const popup = useStore(runtime.popupController)
   const { t } = useLocale(runtime.ctx)
+
+  useEffect(() => {
+    runtime.setSurface?.('popup')
+    return () => runtime.setSurface?.('inpage')
+  }, [])
+
   const backendLabel = t(BACKEND_LABEL[popup?.backend] ?? 'popup.backendInpage')
 
   return h('div', { className: 'dni-popup' },
