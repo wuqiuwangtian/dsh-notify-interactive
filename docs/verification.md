@@ -11,7 +11,7 @@
 | 单元测试 | `pnpm test` | **46 passed / 0 failed** |
 | 渲染冒烟 | `pnpm render-smoke` | 通过；Settings 4860B、PopupApp 3556B；断言无外层标题/无额外关闭按钮 |
 | 宿主 apply 冒烟 | 临时 Node mock `ctx.inject` / `webServer` / `session/event` | 通过；presence 与 windows-notify 路由注册；presence active 时 turn/end 不触发 Windows |
-| PowerShell 负载 | 临时 `powershell.exe` 命令解码 base64 JSON 并输出 | 通过；中文标题/正文完整（不使用 WSL 环境变量转发） |
+| PowerShell 负载 | 临时 `powershell.exe -EncodedCommand` 解码 base64 JSON、构建 WinForms 窗口并输出 | 通过；中文标题/正文完整、宽度 360、两个按钮（不使用 WSL 环境变量转发） |
 | 静态禁入包 | `grep dsh-client-ui-primitives lib/client.js` | 无匹配 |
 | 产物同步 | `pnpm build && git diff --exit-code`（CI） | 待首次提交后验证 |
 
@@ -39,7 +39,7 @@
 
 ## 3. 用户手工验收清单
 
-> 本环境没有浏览器/桌面控制接口；视觉、真实审批/提问、PowerShell 弹窗、CLI/TUI 端到端由用户执行。
+> 本环境没有浏览器/桌面控制接口；视觉、真实审批/提问、WinForms 原生小窗、CLI/TUI 端到端由用户执行。
 
 ### 3.1 设置与弹窗
 
@@ -47,7 +47,7 @@
 2. 设置 → 互动提醒：确认总开关、音效、弹窗打开/测试、Windows 提醒测试、三类测试卡、恢复默认。
 3. 点“打开弹窗”，确认外部小窗显示“提醒”标题和空状态。
 4. 点测试审批/提问/完成卡：卡片应只出现在外部弹窗；页内不应出现任何通知卡片。
-5. 点“测试 Windows 提醒”：Windows/WSL 应弹出 PowerShell 对话框（5 分钟自动关闭）。
+5. 点“测试 Windows 提醒”：Windows/WSL 应弹出 WinForms 原生小窗（标题/正文/“打开 DSH”/“关闭”，5 分钟自动关闭）；点“打开 DSH”应打开浏览器，点“关闭”应关闭窗口。
 
 ### 3.2 聚焦当前会话
 
@@ -84,7 +84,7 @@
 |---|---|---|
 | 交互弹窗视觉 | 无浏览器自动化 | 由用户确认 |
 | Document PiP 实际置顶 | 依赖 Edge/Chrome 与用户点击 | 由用户确认 |
-| PowerShell Windows 弹窗 | 需桌面环境；会弹真实对话框 | 由用户确认 |
+| WinForms 原生小窗 | 需桌面环境；会弹真实窗口 | 由用户确认 |
 | CLI/TUI 端到端 | 需要另一个 profile/终端 | 由用户确认 |
 | presence 路由实际注册 | 需刷新后的 Web 页面 | 安装后检查 |
 | 多标签页去重 | 第一阶段未实现 | 文档说明 |

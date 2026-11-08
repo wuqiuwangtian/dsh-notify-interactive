@@ -122,7 +122,7 @@
 2. 宿主 session projection 提供完成原因与回复预览；Web 完成卡区分。
 3. 多标签页 BroadcastChannel leader 选举，避免多个 Web 面重复投递。
 4. 按会话静音、主线/支线优先级、重复提醒间隔。
-5. 可选原生 Windows toast（非模态、可点击），替代/补充 `WScript.Shell.Popup`。
+5. 可选原生 Windows toast（非模态、可点击），替代/补充当前 WinForms 原生小窗。
 6. 设置从 localStorage 迁移到 profile 配置，跨浏览器同步。
 
 ## 6. 关键决策
@@ -144,4 +144,4 @@
 - Windows 兜底依赖 PowerShell/桌面；无 GUI 或非 Windows 无兜底。
 - presence 心跳/`pagehide` 失败时，宿主最多 15 秒后才接管。
 - 多标签页可能重复投递；第二阶段解决。
-- Windows `WScript.Shell.Popup` 是模态系统对话框，可能抢焦点；5 分钟自动关闭。
+- Windows 兜底是 WinForms 原生小窗：右下角置顶、打开 DSH/关闭按钮、5 分钟自动关闭；目前只提醒，原生选择/输入在第二阶段评估。

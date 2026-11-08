@@ -7,7 +7,8 @@
 - 交互弹窗改为**按需、有内容才打开**：没有卡片时不会出现“暂无提醒”的空黑框；处理完自动关闭。
 - 弹窗关闭时仍把卡片保存在本地队列；用户之后可以打开交互弹窗查看/作答；Windows 小窗同时作为即时提醒。
 - 设置页“打开弹窗”在无提醒时禁用；测试卡在弹窗关闭时拉起 Windows 演示小窗。
-- 修复 Windows 兜底空白对话框：标题/正文改为 base64 JSON 内嵌 PowerShell 命令，不再依赖 WSL 环境变量转发；已用 `powershell.exe` 验证中文解码。
+- 修复 Windows 兜底空白对话框：标题/正文改为 base64 JSON + UTF-16 `-EncodedCommand`，不再依赖 WSL 环境变量转发；已用 `powershell.exe` 验证中文解码和 WinForms 窗口构建。
+- Windows 兜底从 `WScript.Shell.Popup` 换成原生 WinForms 小窗：右下角置顶、标题/正文、**打开 DSH/关闭**按钮、5 分钟自动关闭；点击有反应。
 - 完成卡在弹窗关闭时也会 8 秒后从队列移除，避免堆积。
 - 文档补充“原生 Windows 弹窗能否输入/选择”的说明。
 

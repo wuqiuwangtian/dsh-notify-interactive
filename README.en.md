@@ -115,14 +115,14 @@ Web client
 
 - No `shell.overlay`; no in-page notifications.
 - The host does not listen to the approval/question waterfall; it only observes committed session events.
-- The Windows fallback uses `WScript.Shell.Popup`, receives title/body via base64, auto-closes after 5 minutes, and does not block the host.
+- The Windows fallback is a native WinForms window: title/body arrive via base64 + UTF-16 command, it is topmost at the bottom-right, has **Open DSH / Close** buttons, auto-closes after 5 minutes, and does not block the host.
 
 ## Can a native Windows popup accept input/selection?
 
-- The current fallback, `WScript.Shell.Popup`, **cannot**: it only has OK, with no text field or options.
-- Windows toast input/action support is unreliable and unsuitable for custom answers.
-- **A WinForms/WPF dialog can**: it can contain radio buttons, checkboxes, text fields, and return the result. If a native answerable popup is required, it can be a phase 2 feature. The tradeoff is a separate native UI that cannot match DSH exactly, and the host would need to own the answer chain.
-- Today the answerable surface is the DSH-styled Web popup: opened on demand only while a card exists, and closed after handling. When closed, the Windows reminder is used.
+- The fallback is now a **native WinForms window** with title, body, **Open DSH** and **Close** buttons; clicks respond and it can open DSH.
+- It is currently **reminder + open DSH** only; it has no radio/checkbox/text input yet. WinForms/WPF can do that: add controls and return the result. A native answerable popup can be a phase 2 feature. The tradeoff is a separate native UI that cannot match DSH exactly, and the host would need to own the answer chain.
+- The old blank `WScript.Shell.Popup` window has been removed.
+- The DSH-styled Web popup remains an optional answerable surface: open it on demand only while a card exists; it closes after handling.
 
 ## Limitations
 

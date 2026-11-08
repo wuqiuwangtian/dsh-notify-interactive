@@ -42,7 +42,7 @@
 
 | 半区 | 职责 |
 |---|---|
-| Host | 观察 `session/event`（`approval/asked`、`tool/call(ask_user_question|exit_plan_mode)`、`turn/end`）；无活跃 Web presence 时用 PowerShell `WScript.Shell.Popup` 提醒；提供 presence / windows-notify 路由 |
+| Host | 观察 `session/event`（`approval/asked`、`tool/call(ask_user_question|exit_plan_mode)`、`turn/end`）；无活跃 Web presence 时用 PowerShell WinForms 原生小窗提醒（打开 DSH / 关闭）；提供 presence / windows-notify 路由 |
 | Client | 观察 `uiSession.sessionStatus` + `sessions.list`；上报 presence；聚焦当前会话时静默；弹窗打开时入队；弹窗关闭时调用宿主 Windows 兜底 |
 | Popup | Document PiP / 普通弹窗；极简卡片；审批/提问/计划/完成交互 |
 
@@ -90,7 +90,7 @@
 
 - WSL：`/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe`。
 - Windows：`powershell.exe`。
-- `WScript.Shell.Popup(text, 20, title, 64)`：非阻塞（独立进程）、5 分钟自动关闭；不能作答。
+- PowerShell WinForms 小窗：右下角置顶、标题/正文、打开 DSH/关闭按钮、5 分钟自动关闭；独立进程，不阻塞宿主。当前只提醒，可在第二阶段扩展为原生选择/输入。
 - `[System.Media.SystemSounds]::Asterisk.Play()` 提供系统提示音。
 
 ## 5. 开发前检查点
