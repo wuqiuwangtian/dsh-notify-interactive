@@ -72,6 +72,7 @@ export function createSoundPlayer(options = {}) {
   const now = options.now ?? (() => Date.now())
   let audio = null
   let lastPlayedAt = 0
+  const activeElements = new Set()
 
   function ensureContext() {
     if (audio !== null) {
@@ -114,22 +115,42 @@ export function createSoundPlayer(options = {}) {
     }
   }
 
-  async function playViaAudioElement(preset, volume) {
-    if (typeof globalThis.Audio !== 'function') return false
+  /**
+   * Start an <audio> element synchronously so the call stays inside the user
+   * activation window; the returned promise settles after playback starts.
+   * @returns {Promise<boolean> | null} null when no audio element can be used.
+   */
+  function startAudioElement(preset, volume) {
+    if (typeof globalThis.Audio !== 'function') return null
     let url = wavCache.get(preset.id)
     if (url === undefined) {
       url = renderPresetToDataUrl(preset)
       wavCache.set(preset.id, url)
     }
-    if (url === '') return false
+    if (url === '') return null
     try {
       const element = new globalThis.Audio(url)
       element.volume = clampVolume(volume)
-      await element.play()
-      return true
+      const cleanup = () => activeElements.delete(element)
+      element.addEventListener?.('ended', cleanup, { once: true })
+      element.addEventListener?.('error', cleanup, { once: true })
+      activeElements.add(element)
+      const started = element.play()
+      if (started !== undefined && typeof started.then === 'function') {
+        return started.then(() => true).catch(() => {
+          cleanup()
+          return false
+        })
+      }
+      return Promise.resolve(true)
     } catch {
-      return false
+      return Promise.resolve(false)
     }
+  }
+
+  async function playViaAudioElement(preset, volume) {
+    const started = startAudioElement(preset, volume)
+    return started === null ? false : started
   }
 
   function play(presetId, volume) {
@@ -140,31 +161,34 @@ export function createSoundPlayer(options = {}) {
     lastPlayedAt = timestamp
     const level = clampVolume(volume)
     const context = ensureContext()
+    if (context !== null && context !== undefined && context.state === 'running') {
+      schedule(context, preset, level)
+      return true
+    }
+    // Suspended contexts are the most common autoplay failure. Starting the
+    // generated WAV element synchronously (inside a user gesture) is the most
+    // reliable fallback, and it avoids scheduling Web Audio twice.
+    const elementAttempt = startAudioElement(preset, level)
+    if (elementAttempt !== null) {
+      void elementAttempt
+      return true
+    }
     if (context !== null && context !== undefined) {
-      if (context.state === 'running') {
-        schedule(context, preset, level)
-        return true
-      }
       try {
         const resumed = context.resume?.()
         if (resumed !== undefined && typeof resumed.then === 'function') {
           resumed.then(() => {
             if (context.state === 'running') schedule(context, preset, level)
-            else void playViaAudioElement(preset, level)
-          }).catch(() => {
-            void playViaAudioElement(preset, level)
-          })
+          }).catch(() => {})
         } else {
           schedule(context, preset, level)
         }
         return true
       } catch {
-        // Fall through to the WAV element.
+        // No playable path remains.
       }
     }
-    if (typeof globalThis.Audio !== 'function') return false
-    void playViaAudioElement(preset, level)
-    return true
+    return false
   }
 
   /**
@@ -176,22 +200,32 @@ export function createSoundPlayer(options = {}) {
     if (preset.notes.length === 0) return 'silent'
     const level = clampVolume(volume)
     const context = ensureContext()
+    if (context !== null && context !== undefined && context.state === 'running') {
+      schedule(context, preset, level)
+      return 'played'
+    }
+    // Start the WAV element before any await so the click's activation is
+    // still valid. If it fails, try one last AudioContext resume.
+    const elementAttempt = startAudioElement(preset, level)
+    if (elementAttempt !== null) {
+      const played = await elementAttempt
+      if (played) return 'fallback'
+    }
     if (context !== null && context !== undefined) {
       try {
-        if (context.state === 'suspended') await context.resume?.()
+        await context.resume?.()
         if (context.state === 'running') {
           schedule(context, preset, level)
           return 'played'
         }
       } catch {
-        // Fall through to the WAV element.
+        // No playable path remains.
       }
     }
-    if (typeof globalThis.Audio !== 'function') {
-      return context !== null && context !== undefined ? 'blocked' : 'unsupported'
+    if (typeof globalThis.Audio !== 'function' && (context === null || context === undefined)) {
+      return 'unsupported'
     }
-    const played = await playViaAudioElement(preset, level)
-    return played ? 'fallback' : 'blocked'
+    return 'blocked'
   }
 
   return {
