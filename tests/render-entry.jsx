@@ -88,6 +88,8 @@ const checks = [
   ['popup has no decorative subtitle', !popupHtml.includes('审批、提问与完成提醒')],
   ['popup has no settings footer', !popupHtml.includes('配置通道')],
   ['popup cards have no decorative icon block', !popupHtml.includes('dni-card-icon')],
+  ['popup has no outer header', !popupHtml.includes('dni-popup-head')],
+  ['popup has no extra close buttons', !popupHtml.includes('dni-icon-button') && !popupHtml.includes('aria-label="关闭"')],
   ['settings has no old system-notification section', !settingsHtml.includes('Windows 系统通知')],
   ['settings has no old do-not-disturb section', !settingsHtml.includes('当前会话不打扰')],
 ]

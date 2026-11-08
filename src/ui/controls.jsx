@@ -79,17 +79,6 @@ export function Badge({ tone = 'neutral', children }) {
   return h('span', { className: `dni-badge dni-badge-${tone}` }, children)
 }
 
-export function IconButton({ label, onClick, disabled = false, children }) {
-  return h('button', {
-    type: 'button',
-    className: 'dni-icon-button',
-    'aria-label': label,
-    title: label,
-    disabled,
-    onClick,
-  }, children)
-}
-
 export function Divider() {
   return h('div', { className: 'dni-divider', role: 'separator' })
 }

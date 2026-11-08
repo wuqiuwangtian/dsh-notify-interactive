@@ -16,8 +16,8 @@ const WINDOW_NAME = 'dsh-notify-interactive'
 
 function windowFeatures() {
   const screen = globalThis.screen
-  const width = 420
-  const height = 640
+  const width = 380
+  const height = 360
   const left = typeof screen?.availWidth === 'number'
     ? Math.max(0, screen.availWidth - width - 24)
     : 120
@@ -172,7 +172,7 @@ export function createPopupController(options = {}) {
     const pictureInPicture = globalThis.documentPictureInPicture
     if (pictureInPicture !== undefined && typeof pictureInPicture.requestWindow === 'function') {
       try {
-        candidate = await pictureInPicture.requestWindow({ width: 420, height: 640 })
+        candidate = await pictureInPicture.requestWindow({ width: 380, height: 360 })
         nextBackend = 'pip'
       } catch {
         candidate = null

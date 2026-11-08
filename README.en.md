@@ -29,7 +29,7 @@ One rule: **while you are focused on the current conversation, nothing happens.*
 | CLI/TUI fallback | Host observes session events and shows a PowerShell Windows popup |
 | Closed-tab fallback | Web client reports presence; the host takes over after the page is gone |
 | Sound | Optional Web Audio; the Windows fallback plays the system sound |
-| Minimal UI | Title, necessary context, session entry, and actions only |
+| Minimal UI | Title, necessary context, session entry, and actions only; no outer popup header or extra close buttons |
 | Privacy | No session-log writes, no model tools, no auto-answer, no uploads |
 
 ## Status

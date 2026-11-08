@@ -9,7 +9,7 @@
 | 构建 | `pnpm build` | 通过；`lib/client.js` 约 112 KB，`lib/index.js` 为宿主半区 |
 | 语法 | `pnpm check` | 通过 |
 | 单元测试 | `pnpm test` | **45 passed / 0 failed** |
-| 渲染冒烟 | `pnpm render-smoke` | 通过；Settings 4815B、PopupApp 5352B |
+| 渲染冒烟 | `pnpm render-smoke` | 通过；Settings 4815B、PopupApp 3630B；断言无外层标题/无额外关闭按钮 |
 | 宿主 apply 冒烟 | 临时 Node mock `ctx.inject` / `webServer` / `session/event` | 通过；presence 与 windows-notify 路由注册；presence active 时 turn/end 不触发 Windows |
 | 静态禁入包 | `grep dsh-client-ui-primitives lib/client.js` | 无匹配 |
 | 产物同步 | `pnpm build && git diff --exit-code`（CI） | 待首次提交后验证 |

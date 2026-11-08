@@ -1,7 +1,5 @@
 import { createElement as h, useEffect } from 'react'
 import { runtime } from '../client/runtime.js'
-import { CloseIcon } from './icons.jsx'
-import { IconButton } from './controls.jsx'
 import { useStore } from './useStore.js'
 import { useLocale } from './locale.js'
 import { CardList } from './cards/index.jsx'
@@ -17,13 +15,6 @@ export function PopupApp() {
   }, [])
 
   return h('div', { className: 'dni-popup' },
-    h('header', { className: 'dni-popup-head' },
-      h('div', { className: 'dni-popup-title' }, t('popup.title')),
-      h(IconButton, {
-        label: t('popup.close'),
-        onClick: () => runtime.closePopup(),
-      }, h(CloseIcon, { size: 16 })),
-    ),
     h('main', { className: 'dni-popup-list' },
       notifications.length === 0
         ? h('div', { className: 'dni-empty' }, t('popup.empty'))

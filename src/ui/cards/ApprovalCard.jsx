@@ -45,8 +45,6 @@ export function ApprovalCard({ item, t, onOpenSession, onDismiss, resolveText })
     sessionId: item.sessionId,
     t,
     onOpenSession,
-    onDismiss: () => onDismiss?.(item.id),
-    dismissible: item.demo === true,
     demo: item.demo === true,
     footer: h('div', { className: 'dni-card-actions-row' },
       h(CardButton, {

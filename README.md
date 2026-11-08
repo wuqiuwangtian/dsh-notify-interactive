@@ -29,7 +29,7 @@
 | CLI/TUI 兜底 | 宿主观察 session 事件，通过 PowerShell 弹 Windows 提醒 |
 | Web 关页兜底 | Web 客户端上报 presence；页面关闭后宿主自动接管 Windows 提醒 |
 | 音效 | 可选，Web Audio 本地合成；Windows 兜底自带系统提示音 |
-| 极简 UI | 只保留标题、必要上下文、会话入口和操作按钮 |
+| 极简 UI | 只保留最内侧卡片：标题、必要上下文、会话入口和操作；没有外层标题栏/额外关闭按钮 |
 | 隐私 | 不写 session log、不注册模型工具、不自动作答、不上传数据 |
 
 ## 状态

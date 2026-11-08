@@ -92,21 +92,6 @@ export const POPUP_CSS = String.raw`
   color: var(--dsw-alias-state-error-primary);
 }
 .dni-btn-danger:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover-danger, transparent); }
-.dni-icon-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--dsw-alias-label-secondary);
-  cursor: pointer;
-}
-.dni-icon-button:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .dni-badge {
   display: inline-flex;
   align-items: center;
@@ -297,16 +282,13 @@ export const POPUP_CSS = String.raw`
 .dni-popup-body { margin: 0; height: 100%; overflow: hidden; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font-family: var(--ds-font-family, inherit); font-size: 13px; }
 .dni-popup-root { height: 100%; }
 .dni-popup { display: flex; flex-direction: column; height: 100%; box-sizing: border-box; }
-.dni-popup-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--dsw-alias-border-l1); }
-.dni-popup-title { font-size: 13px; font-weight: 600; line-height: 20px; }
-.dni-popup-list { display: flex; flex: 1; flex-direction: column; gap: 10px; overflow-y: auto; padding: 12px; scrollbar-width: thin; }
+.dni-popup-list { display: flex; flex: 1; flex-direction: column; gap: 8px; overflow-y: auto; padding: 8px; scrollbar-width: thin; }
 .dni-empty { margin: auto; padding: 24px 12px; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; text-align: center; }
 .dni-btn:focus-visible,
 .dni-switch:focus-visible,
 .dni-option:focus-visible,
 .dni-input:focus-visible,
 .dni-link-button:focus-visible,
-.dni-icon-button:focus-visible,
 .dni-select:focus-visible,
 .dni-slider:focus-visible {
   outline: 2px solid var(--dsw-alias-brand-primary);

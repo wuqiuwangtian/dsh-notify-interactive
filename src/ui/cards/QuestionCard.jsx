@@ -195,8 +195,6 @@ export function QuestionCard({ item, t, onOpenSession, onDismiss }) {
     sessionId: item.sessionId,
     t,
     onOpenSession,
-    onDismiss: () => onDismiss?.(item.id),
-    dismissible: demo,
     demo,
     footer: h('div', { className: 'dni-card-actions-row dni-card-actions-wrap' }, footerChildren),
   },

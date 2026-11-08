@@ -1,6 +1,5 @@
 import { createElement as h, useSyncExternalStore } from 'react'
-import { Button, IconButton } from '../controls.jsx'
-import { CloseIcon } from '../icons.jsx'
+import { Button } from '../controls.jsx'
 
 const noopSubscribe = () => () => {}
 const emptySnapshot = () => undefined
@@ -22,8 +21,6 @@ export function CardShell({
   sessionId,
   t,
   onOpenSession,
-  onDismiss,
-  dismissible = false,
   demo = false,
   children,
   footer,
@@ -48,12 +45,6 @@ export function CardShell({
             : h('div', { className: 'dni-card-session' }, sessionTitle))
           : null,
       ),
-      dismissible
-        ? h(IconButton, {
-          label: t('card.dismiss'),
-          onClick: () => onDismiss?.(),
-        }, h(CloseIcon, { size: 14 }))
-        : null,
     ),
     h('div', { className: 'dni-card-body' }, children),
     footer !== undefined && footer !== null

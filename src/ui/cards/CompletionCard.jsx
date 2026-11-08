@@ -19,8 +19,6 @@ export function CompletionCard({ item, t, onOpenSession, onDismiss }) {
     sessionId: item.sessionId,
     t,
     onOpenSession,
-    onDismiss: () => onDismiss?.(item.id),
-    dismissible: true,
     demo: item.demo === true,
     footer: h('div', {
       className: 'dni-card-actions-row',
