@@ -44,6 +44,7 @@ export function createEngine(options) {
     resolveText,
     getVisibility,
     getFocused,
+    isPopupOpen = () => false,
     onActivate,
     now = () => Date.now(),
   } = options
@@ -81,10 +82,6 @@ export function createEngine(options) {
     if (kind === 'plan-review') return 'planReview'
     if (kind === 'completion') return 'completion'
     return 'question'
-  }
-
-  function systemChannelAllowed(settings) {
-    return settings.system.onlyWhenHidden === false || visibility() === 'hidden'
   }
 
   function notifySystem(kind, title, body, sessionId) {
@@ -143,7 +140,7 @@ export function createEngine(options) {
     if (gate.sound && settings.sound.preset !== 'none') {
       soundPlayer?.play?.(settings.sound.preset, settings.sound.volume)
     }
-    if (gate.system && systemChannelAllowed(settings)) {
+    if (gate.system && !isPopupOpen()) {
       notifySystem(kind, systemTitle(kind), interactionBody(interaction, sessionTitle), sessionId)
     }
   }
@@ -189,7 +186,7 @@ export function createEngine(options) {
     if (gate.sound && settings.sound.preset !== 'none') {
       soundPlayer?.play?.(settings.sound.preset, settings.sound.volume)
     }
-    if (gate.system && systemChannelAllowed(settings)) {
+    if (gate.system && !isPopupOpen()) {
       notifySystem(
         'completion',
         systemTitle('completion'),

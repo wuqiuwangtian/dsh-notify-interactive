@@ -55,8 +55,15 @@ export function isAttended({
 
 /**
  * Resolve the three independent delivery channels for one event.
+ *
+ * Surface rule:
+ * - The page is active (focused + visible): the in-page card is the primary
+ *   surface; a Windows toast would duplicate it, so the system channel is off.
+ * - The page is inactive: the system toast (or an already-open popup) is the
+ *   outside alert; the in-page card remains a record for when the user returns.
+ *
  * @param {object} input settings, scenario key, focus state, and session identity.
- * @returns {{ attended: boolean, sound: boolean, popup: boolean, system: boolean }}
+ * @returns {{ attended: boolean, pageActive: boolean, sound: boolean, popup: boolean, system: boolean }}
  */
 export function gateChannels({
   settings,
@@ -75,10 +82,14 @@ export function gateChannels({
     suppressWhenFocused: settings?.behavior?.suppressWhenFocused !== false,
   })
   const enabled = settings?.enabled !== false && !attended
+  const pageActive = Boolean(focused && visibility === 'visible')
   return {
     attended,
+    pageActive,
     sound: enabled && settings?.sound?.enabled !== false && scenario.sound !== false,
     popup: enabled && settings?.popup?.enabled !== false && scenario.popup !== false,
-    system: enabled && settings?.system?.enabled !== false && scenario.system !== false,
+    // A Windows toast while the user is looking at DSH duplicates the in-page
+    // card; the popup-open check is applied by the engine as well.
+    system: enabled && !pageActive && settings?.system?.enabled !== false && scenario.system !== false,
   }
 }

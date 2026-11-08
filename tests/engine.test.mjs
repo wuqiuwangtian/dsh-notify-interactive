@@ -57,6 +57,7 @@ function createHarness(overrides = {}, options = {}) {
     resolveText: (value) => value?.en ?? '',
     getVisibility: () => options.visibility ?? 'hidden',
     getFocused: () => options.focused ?? false,
+    isPopupOpen: () => options.popupOpen ?? false,
     onActivate: (sessionId) => activated.push(sessionId),
     now: () => nowValue,
   })
@@ -151,6 +152,24 @@ test('engine includes subagents when the preference is enabled', () => {
   assert.equal(harness.notificationStore.count(), 1)
 })
 
+test('engine keeps the in-page card but skips the Windows toast while the page is active', () => {
+  const harness = createHarness({}, { focused: true, visibility: 'visible' })
+  harness.engine.ingest(statusOf({ running: true }), sessionsOf({ main: false }))
+  harness.engine.ingest(statusOf({ running: false }), sessionsOf({ main: false }))
+  assert.equal(harness.notificationStore.count(), 1)
+  assert.equal(harness.soundCalls.length, 1)
+  assert.equal(harness.systemCalls.length, 0)
+})
+
+test('engine skips the Windows toast when the interactive popup owns the surface', () => {
+  const harness = createHarness({}, { popupOpen: true })
+  harness.engine.ingest(statusOf({ running: true }), sessionsOf())
+  harness.engine.ingest(statusOf({ running: false }), sessionsOf())
+  assert.equal(harness.notificationStore.count(), 1)
+  assert.equal(harness.soundCalls.length, 1)
+  assert.equal(harness.systemCalls.length, 0)
+})
+
 test('engine creates a completion card and de-duplicates the two signals', () => {
   const harness = createHarness()
   harness.engine.ingest(statusOf({ running: true }), sessionsOf())
@@ -181,6 +200,53 @@ test('engine reset re-baselines without replaying the same pending request', () 
   harness.engine.ingest(statusOf({ pendingInteraction: approval('a1') }), sessionsOf())
   assert.equal(harness.notificationStore.count(), 0)
   assert.equal(harness.soundCalls.length, 0)
+})
+
+test('gateChannels makes the in-page card primary while the page is active', () => {
+  const settings = createDefaultSettings()
+  const gate = gateChannels({
+    settings,
+    scenarioKey: 'completion',
+    sessionId: 's1',
+    mainSessionId: 's2',
+    visibility: 'visible',
+    focused: true,
+  })
+  assert.equal(gate.attended, false)
+  assert.equal(gate.pageActive, true)
+  assert.equal(gate.sound, true)
+  assert.equal(gate.popup, true)
+  assert.equal(gate.system, false)
+})
+
+test('gateChannels enables the Windows toast while the page is inactive', () => {
+  const settings = createDefaultSettings()
+  const gate = gateChannels({
+    settings,
+    scenarioKey: 'completion',
+    sessionId: 's1',
+    mainSessionId: 's2',
+    visibility: 'hidden',
+    focused: false,
+  })
+  assert.equal(gate.pageActive, false)
+  assert.equal(gate.system, true)
+})
+
+test('gateChannels suppresses everything for the current focused session', () => {
+  const settings = createDefaultSettings()
+  const gate = gateChannels({
+    settings,
+    scenarioKey: 'approval',
+    sessionId: 's1',
+    mainSessionId: 's1',
+    visibility: 'visible',
+    focused: true,
+  })
+  assert.equal(gate.attended, true)
+  assert.equal(gate.sound, false)
+  assert.equal(gate.popup, false)
+  assert.equal(gate.system, false)
 })
 
 test('gateChannels disables channels independently', () => {

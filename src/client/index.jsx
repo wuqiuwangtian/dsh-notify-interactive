@@ -91,6 +91,7 @@ export function apply(ctx) {
         return false
       }
     },
+    isPopupOpen: () => runtime.surfaceStore.isPopup(),
     onActivate: (sessionId) => {
       openSession(sessionId)
       if (settingsStore.getSnapshot().popup.enabled && !popupController.isOpen()) {
@@ -140,7 +141,7 @@ export function apply(ctx) {
     if (item !== undefined) notificationStore.upsert(item)
   }
   runtime.ready = true
-  runtime.version = '0.1.3'
+  runtime.version = '0.1.4'
   try {
     // Diagnostics/support handle; the settings page is the normal entry point.
     globalThis.__dshNotifyInteractive = runtime

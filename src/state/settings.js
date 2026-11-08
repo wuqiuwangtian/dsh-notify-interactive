@@ -35,9 +35,6 @@ export function createDefaultSettings() {
     },
     system: {
       enabled: true,
-      // The attended/current-session gate already prevents duplicate alerts;
-      // the system toast is therefore allowed even when the page is merely visible.
-      onlyWhenHidden: false,
     },
     behavior: {
       suppressWhenFocused: true,
@@ -115,7 +112,6 @@ export function normalizeSettings(raw) {
     },
     system: {
       enabled: bool(system.enabled, true),
-      onlyWhenHidden: bool(system.onlyWhenHidden, false),
     },
     behavior: {
       suppressWhenFocused: bool(behavior.suppressWhenFocused, true),
