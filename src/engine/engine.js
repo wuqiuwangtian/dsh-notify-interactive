@@ -55,6 +55,7 @@ export function createEngine(options) {
   let lastSessions = null
   const completionSequence = new Map()
   const completionCooldown = new Map()
+  const completionTimers = new Map()
 
   const t = (key, vars) => translate(key, vars)
   const visibility = () => (typeof getVisibility === 'function' ? getVisibility() : 'visible')
@@ -95,6 +96,15 @@ export function createEngine(options) {
     })
   }
 
+  function scheduleCompletionRemoval(id) {
+    const timer = setTimeout(() => {
+      completionTimers.delete(id)
+      notificationStore.remove(id)
+    }, 8000)
+    timer.unref?.()
+    completionTimers.set(id, timer)
+  }
+
   function handleInteraction(event, settings, sessionList, mainSessionId) {
     const interaction = event.interaction
     const kind = interaction?.kind === 'approval'
@@ -121,20 +131,22 @@ export function createEngine(options) {
     const soundPlayed = gate.sound ? playSound(settings) : false
     if (!gate.notify) return
 
-    if (isPopupOpen()) {
-      notificationStore.upsert({
-        id: interactionNotificationId(sessionId, interaction.key),
-        kind,
-        scenario: scenarioKey,
-        sessionId,
-        sessionTitle,
-        interaction,
-        sticky: true,
-        demo: false,
-      })
-      return
+    // Keep the card even while the popup is closed: the user can open the
+    // optional interactive popup later and answer it there. When the popup is
+    // closed, the Windows popup also fires immediately as the outside alert.
+    notificationStore.upsert({
+      id: interactionNotificationId(sessionId, interaction.key),
+      kind,
+      scenario: scenarioKey,
+      sessionId,
+      sessionTitle,
+      interaction,
+      sticky: true,
+      demo: false,
+    })
+    if (!isPopupOpen()) {
+      deliverWindows(kind, sessionId, sessionTitle, fallbackTitle(kind), interactionBody(interaction, sessionTitle), soundPlayed)
     }
-    deliverWindows(kind, sessionId, sessionTitle, fallbackTitle(kind), interactionBody(interaction, sessionTitle), soundPlayed)
   }
 
   function handleCompletion(event, settings, sessionList, mainSessionId) {
@@ -160,32 +172,33 @@ export function createEngine(options) {
     const soundPlayed = gate.sound ? playSound(settings) : false
     if (!gate.notify) return
 
-    if (isPopupOpen()) {
-      const sequence = (completionSequence.get(sessionId) ?? 0) + 1
-      completionSequence.set(sessionId, sequence)
-      notificationStore.removeWhere(
-        (item) => item.sessionId === sessionId && item.kind === 'completion',
-      )
-      notificationStore.upsert({
-        id: completionNotificationId(sessionId, sequence),
-        kind: 'completion',
-        scenario: 'completion',
-        sessionId,
-        sessionTitle,
-        sticky: false,
-        completedAt: timestamp,
-        demo: false,
-      })
-      return
-    }
-    deliverWindows(
-      'completion',
+    const sequence = (completionSequence.get(sessionId) ?? 0) + 1
+    completionSequence.set(sessionId, sequence)
+    notificationStore.removeWhere(
+      (item) => item.sessionId === sessionId && item.kind === 'completion',
+    )
+    const id = completionNotificationId(sessionId, sequence)
+    notificationStore.upsert({
+      id,
+      kind: 'completion',
+      scenario: 'completion',
       sessionId,
       sessionTitle,
-      fallbackTitle('completion'),
-      truncate([sessionTitle, t('notify.completion.body')].filter(Boolean).join(' · ')),
-      soundPlayed,
-    )
+      sticky: false,
+      completedAt: timestamp,
+      demo: false,
+    })
+    scheduleCompletionRemoval(id)
+    if (!isPopupOpen()) {
+      deliverWindows(
+        'completion',
+        sessionId,
+        sessionTitle,
+        fallbackTitle('completion'),
+        truncate([sessionTitle, t('notify.completion.body')].filter(Boolean).join(' · ')),
+        soundPlayed,
+      )
+    }
   }
 
   function clearInteractionCard(sessionId, interactionKey) {
@@ -261,6 +274,8 @@ export function createEngine(options) {
     lastSessions = null
     completionCooldown.clear()
     completionSequence.clear()
+    for (const timer of completionTimers.values()) clearTimeout(timer)
+    completionTimers.clear()
   }
 
   return { ingest, reset, dispose }

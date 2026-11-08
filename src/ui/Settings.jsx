@@ -67,6 +67,7 @@ export function Settings() {
   }
 
   async function openPopup() {
+    if (runtime.notificationStore.count() === 0) return
     try {
       await runtime.openPopup()
     } catch {
@@ -180,6 +181,7 @@ export function Settings() {
           h(Button, {
             variant: 'outline',
             size: 'sm',
+            disabled: !popup.open && notifications.length === 0,
             onClick: popup.open ? () => runtime.closePopup() : openPopup,
           }, popup.open ? t('settings.popupClose') : t('settings.popupOpen')),
           h(Button, {

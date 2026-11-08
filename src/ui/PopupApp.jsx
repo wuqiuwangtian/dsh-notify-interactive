@@ -14,17 +14,23 @@ export function PopupApp() {
     return () => runtime.setSurface?.('inpage')
   }, [])
 
+  useEffect(() => {
+    if (notifications.length !== 0) return undefined
+    const timer = setTimeout(() => runtime.closePopup(), 0)
+    return () => clearTimeout(timer)
+  }, [notifications.length])
+
+  if (notifications.length === 0) return null
+
   return h('div', { className: 'dni-popup' },
     h('main', { className: 'dni-popup-list' },
-      notifications.length === 0
-        ? h('div', { className: 'dni-empty' }, t('popup.empty'))
-        : h(CardList, {
-          items: notifications,
-          t,
-          resolveText: runtime.resolveText,
-          onOpenSession: runtime.openSession,
-          onDismiss: runtime.dismiss,
-        }),
+      h(CardList, {
+        items: notifications,
+        t,
+        resolveText: runtime.resolveText,
+        onOpenSession: runtime.openSession,
+        onDismiss: runtime.dismiss,
+      }),
     ),
   )
 }

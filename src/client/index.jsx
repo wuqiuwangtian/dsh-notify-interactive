@@ -150,7 +150,7 @@ export function apply(ctx) {
     if (item !== undefined) notificationStore.upsert(item)
   }
   runtime.ready = true
-  runtime.version = '0.2.0'
+  runtime.version = '0.2.1'
   try {
     // Diagnostics/support handle; the settings page is the normal entry point.
     globalThis.__dshNotifyInteractive = runtime

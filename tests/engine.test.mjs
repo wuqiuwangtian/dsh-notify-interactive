@@ -115,7 +115,8 @@ test('engine seeds and uses the Windows fallback when the popup is closed', () =
   assert.equal(harness.windowsCalls.length, 0)
 
   harness.engine.ingest(statusOf({ pendingInteraction: approval('a2') }), sessionsOf())
-  assert.equal(harness.notificationStore.count(), 0)
+  assert.equal(harness.notificationStore.count(), 1)
+  assert.equal(harness.notificationStore.getSnapshot()[0].id, 'interaction:s1:a2')
   assert.equal(harness.soundCalls.length, 1)
   assert.equal(harness.windowsCalls.length, 1)
   assert.equal(harness.windowsCalls[0].kind, 'approval')
@@ -163,7 +164,7 @@ test('completion uses the popup or the Windows fallback and de-duplicates signal
   const closed = createHarness()
   closed.engine.ingest(statusOf({ running: true }), sessionsOf())
   closed.engine.ingest(statusOf({ running: false }), sessionsOf())
-  assert.equal(closed.notificationStore.count(), 0)
+  assert.equal(closed.notificationStore.count(), 1)
   assert.equal(closed.windowsCalls.length, 1)
   assert.equal(closed.windowsCalls[0].kind, 'completion')
   assert.equal(closed.soundCalls.length, 1)

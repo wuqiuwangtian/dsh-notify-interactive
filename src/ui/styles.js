@@ -283,7 +283,6 @@ export const POPUP_CSS = String.raw`
 .dni-popup-root { height: 100%; }
 .dni-popup { display: flex; flex-direction: column; height: 100%; box-sizing: border-box; }
 .dni-popup-list { display: flex; flex: 1; flex-direction: column; gap: 8px; overflow-y: auto; padding: 8px; scrollbar-width: thin; }
-.dni-empty { margin: auto; padding: 24px 12px; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; text-align: center; }
 .dni-btn:focus-visible,
 .dni-switch:focus-visible,
 .dni-option:focus-visible,
