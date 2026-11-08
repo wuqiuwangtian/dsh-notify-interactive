@@ -8,9 +8,10 @@
 |---|---|---|
 | 构建 | `pnpm build` | 通过；`lib/client.js` 约 112 KB，`lib/index.js` 为宿主半区 |
 | 语法 | `pnpm check` | 通过 |
-| 单元测试 | `pnpm test` | **45 passed / 0 failed** |
-| 渲染冒烟 | `pnpm render-smoke` | 通过；Settings 4815B、PopupApp 3556B；断言无外层标题/无额外关闭按钮 |
+| 单元测试 | `pnpm test` | **46 passed / 0 failed** |
+| 渲染冒烟 | `pnpm render-smoke` | 通过；Settings 4860B、PopupApp 3556B；断言无外层标题/无额外关闭按钮 |
 | 宿主 apply 冒烟 | 临时 Node mock `ctx.inject` / `webServer` / `session/event` | 通过；presence 与 windows-notify 路由注册；presence active 时 turn/end 不触发 Windows |
+| PowerShell 负载 | 临时 `powershell.exe` 命令解码 base64 JSON 并输出 | 通过；中文标题/正文完整（不使用 WSL 环境变量转发） |
 | 静态禁入包 | `grep dsh-client-ui-primitives lib/client.js` | 无匹配 |
 | 产物同步 | `pnpm build && git diff --exit-code`（CI） | 待首次提交后验证 |
 
@@ -20,7 +21,7 @@
 - `tests/engine.test.mjs`：diff 基线/交互/完成/移除；聚焦当前会话静默；其他会话通知；弹窗打开入队；弹窗关闭走 Windows 兜底；子会话跳过；禁用清空；reset。
 - `tests/questions.test.mjs`：单选/多选/自定义/跳过答案构造；校验；计划审核解析。
 - `tests/sounds.test.mjs`：预设、音量、Web Audio、WAV 兜底、试听路径。
-- `tests/host-logic.test.mjs`：presence 策略、session label、approval/question/plan/completion 文案、subagent/aborted 跳过。
+- `tests/host-logic.test.mjs`：presence 策略、session label、approval/question/plan/completion 文案、subagent/aborted 跳过、base64 PowerShell 负载。
 - `tests/host-apply.test.mjs`：宿主路由注册（presence / windows-notify）与 presence 204。
 - `tests/surface.test.mjs`：popup/no-popup 标志。
 - `tests/i18n.test.mjs`：中英文映射与占位符。

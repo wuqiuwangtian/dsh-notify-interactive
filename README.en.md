@@ -59,10 +59,10 @@ Refresh the DSH page after installing. The Web popup must be opened once; CLI/TU
 ## First run
 
 1. Refresh DSH.
-2. Settings → Interactive notifications → **Open popup**. Browser security requires one user click; keep it open.
-3. Use the test approval/question/completion cards.
-4. Use **Test Windows reminder** to verify the host fallback (Windows/WSL).
-5. After closing the popup, reminders use the Windows popup; reopen the popup to restore interaction.
+2. **The interactive popup is optional**: open it only when you want to answer in the window. Browser security requires one click.
+3. You do not need to open it: every message brings a small Windows popup reminder (reminder-only). Use **Test Windows reminder** to verify.
+4. The test approval/question/completion cards show interactive cards while the popup is open; with it closed they raise a Windows demo popup.
+5. After closing the popup, messages use the Windows popup; reopen only when you want in-window answers.
 
 ## Rules
 
@@ -120,7 +120,7 @@ Web client
 
 | Limit | Detail |
 |---|---|
-| Popup must be opened once | Browser security; after closing, Windows fallback takes over |
+| Interactive popup is optional | Open it once only when you want in-window answers; without it, every message uses the Windows popup |
 | Windows fallback is read-only | Cannot approve/reject/answer; return to DSH or the terminal |
 | Platform | Windows or WSL (PowerShell path detection); no Windows fallback elsewhere |
 | No GUI | Without a desktop, Windows popups cannot display either |

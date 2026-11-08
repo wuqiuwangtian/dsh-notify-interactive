@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import {
   PRESENCE_TTL_MS,
   messageForEvent,
+  popupPayload,
+  popupScript,
   reasonLabel,
   sessionLabel,
   shouldAutoNotify,
@@ -81,4 +83,18 @@ test('reason labels and truncation are stable', () => {
   assert.equal(reasonLabel('error'), '出错')
   assert.equal(reasonLabel(undefined), '结束')
   assert.equal(truncate('a'.repeat(10), 5), 'aaaa…')
+})
+
+
+test('popup payload round-trips Chinese text and the script embeds it', () => {
+  const payload = popupPayload('DSH 需要你', '会话 project：Bash 请求批准', true)
+  const decoded = JSON.parse(Buffer.from(payload, 'base64').toString('utf8'))
+  assert.equal(decoded.title, 'DSH 需要你')
+  assert.equal(decoded.body, '会话 project：Bash 请求批准')
+  assert.equal(decoded.silent, true)
+  const script = popupScript(payload)
+  assert.ok(script.includes(payload))
+  assert.match(script, /FromBase64String/)
+  assert.match(script, /WScript\.Shell/)
+  assert.match(script, /Popup/)
 })

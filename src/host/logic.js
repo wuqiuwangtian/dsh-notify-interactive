@@ -110,3 +110,29 @@ export function messageForEvent(session, event) {
 
   return null
 }
+
+
+/**
+ * Encode one popup as base64 JSON. The payload travels inside the PowerShell
+ * command line, which avoids WSL interop dropping custom environment variables.
+ */
+export function popupPayload(title, body, silent = false) {
+  const json = JSON.stringify({
+    title: truncate(title, 80),
+    body: truncate(body, 500),
+    silent: silent === true,
+  })
+  return Buffer.from(json, 'utf8').toString('base64')
+}
+
+/** Build the PowerShell command that decodes and shows one popup. */
+export function popupScript(payload) {
+  return [
+    "$ErrorActionPreference='SilentlyContinue';",
+    `$json = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${payload}'));`,
+    '$data = $json | ConvertFrom-Json;',
+    'if (-not $data.silent) { [System.Media.SystemSounds]::Asterisk.Play() };',
+    '$shell = New-Object -ComObject WScript.Shell;',
+    '$null = $shell.Popup($data.body, 300, $data.title, 64)',
+  ].join(' ')
+}

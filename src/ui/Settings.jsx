@@ -76,6 +76,19 @@ export function Settings() {
 
   function addDemo(kind) {
     runtime.addDemo(kind, { sessionId: mainSessionId, sessionTitle: mainTitle })
+    if (runtime.surfaceStore.isPopup()) return
+    const suffix = kind === 'question' ? 'Question' : kind === 'completion' ? 'Completion' : 'Approval'
+    runtime.windowsFallback({
+      kind: `demo-${kind}`,
+      sessionId: mainSessionId ?? 'demo-session',
+      title: t('settings.demoWindowsTitle'),
+      body: t(`settings.demoWindows${suffix}`),
+      silent: false,
+    })
+  }
+
+  function openPopupTest() {
+    runtime.addDemo('approval', { sessionId: mainSessionId, sessionTitle: mainTitle })
     openPopup()
   }
 
@@ -172,7 +185,7 @@ export function Settings() {
           h(Button, {
             variant: 'ghost',
             size: 'sm',
-            onClick: () => addDemo('approval'),
+            onClick: openPopupTest,
           }, t('settings.popupTest')),
           h(Button, {
             variant: 'ghost',
