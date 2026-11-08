@@ -20,7 +20,7 @@ export function useLocale(ctx) {
     if (typeof ctx?.locale?.subscribe !== 'function') return undefined
     return ctx.locale.subscribe(() => setSnapshot(readLocale(ctx)))
   }, [ctx])
-  const id = localeIdOf(snapshot?.id)
+  const id = localeIdOf(snapshot?.active ?? snapshot?.id)
   return {
     id,
     t: (key, vars) => translate(id, key, vars),

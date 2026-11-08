@@ -30,7 +30,7 @@ const popupController = {
 
 runtime.ctx = {
   locale: {
-    getLocale: () => ({ id: 'zh' }),
+    getLocale: () => ({ active: 'zh', locales: [], revision: 0 }),
     subscribe: () => () => {},
   },
 }
@@ -83,9 +83,13 @@ const settingsHtml = renderToStaticMarkup(h(Settings))
 const overlayHtml = renderToStaticMarkup(h(Overlay))
 const popupHtml = renderToStaticMarkup(h(PopupApp))
 
+runtime.ctx.locale.getLocale = () => ({ active: 'en', locales: [], revision: 1 })
+const settingsHtmlEn = renderToStaticMarkup(h(Settings))
+
 const checks = [
   ['settings title', settingsHtml.includes('互动提醒')],
   ['settings sound section', settingsHtml.includes('音效')],
+  ['settings english title', settingsHtmlEn.includes('Interactive notifications')],
   ['overlay approval card', overlayHtml.includes('需要你的批准')],
   ['popup question card', popupHtml.includes('需要你的回答')],
   ['popup completion card', popupHtml.includes('本轮已结束')],
