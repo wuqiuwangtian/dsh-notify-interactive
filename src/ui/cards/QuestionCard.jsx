@@ -1,5 +1,4 @@
 import { createElement as h, useEffect, useState } from 'react'
-import { QuestionIcon } from '../icons.jsx'
 import {
   buildAnswer,
   createDrafts,
@@ -103,12 +102,12 @@ export function QuestionCard({ item, t, onOpenSession, onDismiss }) {
       question.header !== undefined
         ? h('div', { className: 'dni-question-header' }, question.header)
         : null,
-      h('div', { className: 'dni-question-text' }, question.question),
+      h('div', { className: 'dni-question-text' },
+        question.question,
+        multi ? h('span', { className: 'dni-question-multi' }, ` ${t('card.question.multiShort')}`) : null,
+      ),
       question.detail !== undefined && question.detail !== ''
         ? h('div', { className: 'dni-question-detail' }, question.detail)
-        : null,
-      multi
-        ? h('div', { className: 'dni-question-hint' }, t('card.question.multi'))
         : null,
       options.length > 0
         ? h('div', { className: 'dni-options', role: 'group' },
@@ -133,24 +132,21 @@ export function QuestionCard({ item, t, onOpenSession, onDismiss }) {
           }),
         )
         : null,
-      h('div', { className: `dni-custom-row${draft.custom !== '' ? ' is-active' : ''}` },
-        h('label', { className: 'dni-custom-label', htmlFor: `dni-question-${item.id}-${index}` }, t('card.question.other')),
-        h('input', {
-          id: `dni-question-${item.id}-${index}`,
-          className: 'dni-input',
-          type: 'text',
-          value: draft.custom,
-          placeholder: t('card.question.otherPlaceholder'),
-          disabled: disabled || draft.skipped === true,
-          onChange: (event) => update(index, updateCustom(draft, event.target.value, multi)),
-          onKeyDown: (event) => {
-            if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
-              event.preventDefault()
-              submit()
-            }
-          },
-        }),
-      ),
+      h('input', {
+        id: `dni-question-${item.id}-${index}`,
+        className: 'dni-input',
+        type: 'text',
+        value: draft.custom,
+        placeholder: t('card.question.otherPlaceholder'),
+        disabled: disabled || draft.skipped === true,
+        onChange: (event) => update(index, updateCustom(draft, event.target.value, multi)),
+        onKeyDown: (event) => {
+          if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+            event.preventDefault()
+            submit()
+          }
+        },
+      }),
       h('div', { className: 'dni-question-footer' },
         draft.skipped === true
           ? h('span', { className: 'dni-question-skipped' }, t('card.question.skipped'))
@@ -158,7 +154,7 @@ export function QuestionCard({ item, t, onOpenSession, onDismiss }) {
         h('button', {
           type: 'button',
           className: 'dni-link-button',
-          disabled: disabled,
+          disabled,
           onClick: () => {
             update(index, draft.skipped === true
               ? { selected: [], custom: '', skipped: false }
@@ -194,8 +190,6 @@ export function QuestionCard({ item, t, onOpenSession, onDismiss }) {
   }, sent ? t('card.question.sent') : t('card.question.submit')))
 
   return h(CardShell, {
-    tone: 'info',
-    icon: h(QuestionIcon, { size: 18 }),
     title: t('card.question.title'),
     sessionTitle: item.sessionTitle,
     sessionId: item.sessionId,
@@ -204,9 +198,6 @@ export function QuestionCard({ item, t, onOpenSession, onDismiss }) {
     onDismiss: () => onDismiss?.(item.id),
     dismissible: demo,
     demo,
-    badge: questions.length > 1
-      ? h('span', { className: 'dni-badge dni-badge-neutral' }, String(questions.length))
-      : null,
     footer: h('div', { className: 'dni-card-actions-row dni-card-actions-wrap' }, footerChildren),
   },
   body,

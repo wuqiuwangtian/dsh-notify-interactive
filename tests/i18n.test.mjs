@@ -18,6 +18,6 @@ test('non-Chinese locales fall back to English', () => {
 })
 
 test('placeholder interpolation works in both dictionaries', () => {
-  assert.equal(translate('zh', 'popup.more', { count: 3 }), '还有 3 条')
-  assert.equal(translate('en', 'popup.more', { count: 3 }), '3 more')
+  assert.equal(translate('zh', 'card.question.countdown', { seconds: 3 }), '3 秒后继续工作')
+  assert.equal(translate('en', 'card.question.countdown', { seconds: 3 }), 'Continuing in 3s')
 })

@@ -16,7 +16,6 @@ export const runtime = {
   popupController: undefined,
   engine: undefined,
   soundPlayer: undefined,
-  systemNotifier: undefined,
   translate: (key) => key,
   resolveText: (value) => (value?.en ?? ''),
   openSession: () => {},
@@ -26,7 +25,6 @@ export const runtime = {
   addDemo: () => {},
   getMainSession: () => ({ id: undefined, title: undefined }),
   resetSettings: () => {},
-  requestNotificationPermission: async () => 'default',
-  testSystemNotification: () => {},
+  windowsFallback: () => {},
   previewSound: () => false,
 }

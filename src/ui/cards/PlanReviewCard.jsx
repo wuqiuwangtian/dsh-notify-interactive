@@ -1,5 +1,4 @@
 import { createElement as h, useState } from 'react'
-import { PlanIcon } from '../icons.jsx'
 import { planAnswer, planReviewOptions } from '../../engine/question-answer.js'
 import { CardButton, CardShell } from './shared.jsx'
 import { QuestionCard } from './QuestionCard.jsx'
@@ -67,8 +66,6 @@ export function PlanReviewCard(props) {
   }, t('card.plan.approve')))
 
   return h(CardShell, {
-    tone: 'info',
-    icon: h(PlanIcon, { size: 18 }),
     title: t('card.plan.title'),
     subtitle: question.question,
     sessionTitle: item.sessionTitle,
@@ -78,10 +75,9 @@ export function PlanReviewCard(props) {
     onDismiss: () => onDismiss?.(item.id),
     dismissible: demo,
     demo,
-    badge: h('span', { className: 'dni-badge dni-badge-info' }, t('card.plan.preview')),
     footer: h('div', { className: 'dni-card-actions-row dni-card-actions-wrap' }, footer),
   },
-  h('pre', { className: 'dni-plan', tabIndex: 0, 'aria-label': t('card.plan.preview') }, planText),
+  h('pre', { className: 'dni-plan', tabIndex: 0 }, planText),
   sent ? h('div', { className: 'dni-success' }, t('card.answered')) : null,
   error !== null ? h('div', { className: 'dni-error', role: 'alert' }, error) : null,
   )

@@ -1,10 +1,9 @@
 /**
- * Which notification surface currently owns the cards.
+ * Whether the interactive popup currently owns delivery.
  *
- * The in-page overlay and the detached popup render the same store, so only one
- * of them may be visible at a time. The popup controller sets `popup` when its
- * root is ready and `inpage` when it closes; the overlay hides while the popup
- * owns the surface.
+ * The popup controller sets `popup` when its root is ready and `inpage` when it
+ * closes or is blocked. The engine reads this flag to choose the interactive
+ * popup or the host's Windows popup fallback.
  */
 export function createSurfaceStore(initial = 'inpage') {
   let surface = initial

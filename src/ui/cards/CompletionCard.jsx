@@ -1,25 +1,20 @@
 import { createElement as h, useEffect, useState } from 'react'
-import { CheckIcon } from '../icons.jsx'
 import { CardButton, CardShell } from './shared.jsx'
 
 /** A turn completion notice, with a direct route back to its session. */
-export function CompletionCard({ item, t, onOpenSession, onDismiss, settings }) {
+export function CompletionCard({ item, t, onOpenSession, onDismiss }) {
   const [paused, setPaused] = useState(false)
-  const autoDismissMs = settings?.behavior?.completionAutoDismissMs ?? 8000
-  // A demo card is a test surface, so keep it until the user closes it.
-  const effectiveAutoDismissMs = item.demo === true ? 0 : autoDismissMs
+  // Demo cards are test surfaces and stay until dismissed.
+  const autoDismissMs = item.demo === true ? 0 : 8000
 
   useEffect(() => {
-    if (paused || !(effectiveAutoDismissMs > 0)) return undefined
-    const timer = setTimeout(() => onDismiss?.(item.id), effectiveAutoDismissMs)
+    if (paused || !(autoDismissMs > 0)) return undefined
+    const timer = setTimeout(() => onDismiss?.(item.id), autoDismissMs)
     return () => clearTimeout(timer)
-  }, [effectiveAutoDismissMs, item.id, onDismiss, paused])
+  }, [autoDismissMs, item.id, onDismiss, paused])
 
   return h(CardShell, {
-    tone: 'success',
-    icon: h(CheckIcon, { size: 18 }),
     title: t('card.completion.title'),
-    subtitle: t('card.completion.body'),
     sessionTitle: item.sessionTitle,
     sessionId: item.sessionId,
     t,

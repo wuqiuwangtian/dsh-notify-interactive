@@ -43,6 +43,7 @@ if (!client.startsWith('window.__ModuleLoader__.load')) {
 }
 await writeFile(resolve(libDir, 'client.js'), client, 'utf8')
 await copyFile(resolve(root, 'src/host/index.js'), resolve(libDir, 'index.js'))
+await copyFile(resolve(root, 'src/host/logic.js'), resolve(libDir, 'logic.js'))
 
 const written = await readFile(resolve(libDir, 'client.js'), 'utf8')
 console.log(`built lib/client.js (${written.length} bytes) and lib/index.js`)

@@ -2,48 +2,28 @@
  * Persistent notification preferences.
  *
  * The plugin never writes the profile's cordis patch: settings live in the
- * browser (localStorage) because every notification surface is browser-owned.
- * A corrupt or unavailable store falls back to defaults instead of failing the
- * plugin.
+ * browser (localStorage) because the web surface is browser-owned. A corrupt
+ * or unavailable store falls back to defaults instead of failing the plugin.
  */
 
-export const SETTINGS_KEY = 'dsh.notify-interactive.settings.v1'
+export const SETTINGS_KEY = 'dsh.notify-interactive.settings.v2'
 export const SOUND_PRESET_IDS = Object.freeze(['chime', 'pulse', 'complete', 'soft', 'alert', 'none'])
 export const SCENARIO_KEYS = Object.freeze(['approval', 'question', 'planReview', 'completion'])
 
 const DEFAULT_PRESET = 'chime'
-const MAX_VOLUME = 1
-const MIN_VOLUME = 0
-const MAX_AUTO_DISMISS_MS = 60_000
-const MIN_AUTO_DISMISS_MS = 0
-const MIN_CARDS = 1
-const MAX_CARDS = 5
 
-/** Full default settings. Callers receive a fresh object from {@link createDefaultSettings}. */
+/** Full default settings. Callers receive a fresh object. */
 export function createDefaultSettings() {
   return {
-    version: 1,
+    version: 2,
     enabled: true,
     sound: {
       enabled: true,
       preset: DEFAULT_PRESET,
       volume: 0.7,
     },
-    popup: {
-      enabled: true,
-      fallbackInPage: true,
-    },
-    system: {
-      enabled: true,
-    },
-    behavior: {
-      suppressWhenFocused: true,
-      includeSubagents: false,
-      completionAutoDismissMs: 8000,
-      maxVisibleCards: 3,
-    },
-    // Phase 1 does not expose this in the settings UI, but the engine reads it
-    // from day one so phase 2 only has to add the rows.
+    // Phase 1 keeps every scenario on. The data model is ready for the
+    // per-scenario settings UI in phase 2.
     scenarios: {
       approval: scenarioDefaults(),
       question: scenarioDefaults(),
@@ -54,7 +34,7 @@ export function createDefaultSettings() {
 }
 
 function scenarioDefaults() {
-  return { sound: true, popup: true, system: true }
+  return { sound: true, notify: true }
 }
 
 function isObject(value) {
@@ -78,8 +58,7 @@ function scenarioOf(raw) {
   const value = isObject(raw) ? raw : {}
   return {
     sound: bool(value.sound, true),
-    popup: bool(value.popup, true),
-    system: bool(value.system, true),
+    notify: bool(value.notify, true),
   }
 }
 
@@ -93,41 +72,15 @@ function scenarioOf(raw) {
 export function normalizeSettings(raw) {
   const value = isObject(raw) ? raw : {}
   const sound = isObject(value.sound) ? value.sound : {}
-  const popup = isObject(value.popup) ? value.popup : {}
-  const system = isObject(value.system) ? value.system : {}
-  const behavior = isObject(value.behavior) ? value.behavior : {}
   const scenarios = isObject(value.scenarios) ? value.scenarios : {}
 
   return {
-    version: 1,
+    version: 2,
     enabled: bool(value.enabled, true),
     sound: {
       enabled: bool(sound.enabled, true),
       preset: presetOf(sound.preset),
-      volume: numberIn(sound.volume, 0.7, MIN_VOLUME, MAX_VOLUME),
-    },
-    popup: {
-      enabled: bool(popup.enabled, true),
-      fallbackInPage: bool(popup.fallbackInPage, true),
-    },
-    system: {
-      enabled: bool(system.enabled, true),
-    },
-    behavior: {
-      suppressWhenFocused: bool(behavior.suppressWhenFocused, true),
-      includeSubagents: bool(behavior.includeSubagents, false),
-      completionAutoDismissMs: numberIn(
-        behavior.completionAutoDismissMs,
-        8000,
-        MIN_AUTO_DISMISS_MS,
-        MAX_AUTO_DISMISS_MS,
-      ),
-      maxVisibleCards: numberIn(
-        behavior.maxVisibleCards,
-        3,
-        MIN_CARDS,
-        MAX_CARDS,
-      ),
+      volume: numberIn(sound.volume, 0.7, 0, 1),
     },
     scenarios: {
       approval: scenarioOf(scenarios.approval),
@@ -138,14 +91,7 @@ export function normalizeSettings(raw) {
   }
 }
 
-/**
- * Merge a partial patch over the current settings.
- * Normalization is applied after the merge, so every caller can pass a tiny
- * patch (for example `{ sound: { enabled: false } }`).
- * @param {object} current current normalized settings.
- * @param {object} patch partial settings.
- * @returns normalized settings.
- */
+/** Merge a partial patch over the current settings. */
 export function mergeSettings(current, patch) {
   const base = normalizeSettings(current)
   const next = isObject(patch) ? patch : {}
@@ -161,18 +107,11 @@ export function mergeSettings(current, patch) {
     ...base,
     ...next,
     sound: { ...base.sound, ...(isObject(next.sound) ? next.sound : {}) },
-    popup: { ...base.popup, ...(isObject(next.popup) ? next.popup : {}) },
-    system: { ...base.system, ...(isObject(next.system) ? next.system : {}) },
-    behavior: { ...base.behavior, ...(isObject(next.behavior) ? next.behavior : {}) },
     scenarios,
   })
 }
 
-/**
- * Create the observable settings store.
- * @param {Storage | undefined} storage localStorage-compatible storage; tests pass a fake.
- * @returns settings store.
- */
+/** Create the observable settings store. */
 export function createSettingsStore(storage) {
   const target = storage ?? globalThis.localStorage
   const listeners = new Set()

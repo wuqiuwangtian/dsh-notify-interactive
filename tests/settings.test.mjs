@@ -18,17 +18,16 @@ function memoryStorage(initial = {}) {
   }
 }
 
-test('defaults cover every channel and scenario', () => {
+test('defaults cover sound and every scenario', () => {
   const defaults = createDefaultSettings()
   assert.equal(defaults.enabled, true)
   assert.equal(defaults.sound.enabled, true)
-  assert.equal(defaults.popup.enabled, true)
-  assert.equal(defaults.system.enabled, true)
   assert.equal(defaults.sound.preset, 'chime')
-  assert.equal(defaults.behavior.includeSubagents, false)
   for (const key of ['approval', 'question', 'planReview', 'completion']) {
-    assert.deepEqual(defaults.scenarios[key], { sound: true, popup: true, system: true })
+    assert.deepEqual(defaults.scenarios[key], { sound: true, notify: true })
   }
+  assert.equal('popup' in defaults, false)
+  assert.equal('system' in defaults, false)
 })
 
 test('normalization drops unknown keys and repairs invalid values', () => {
@@ -36,34 +35,31 @@ test('normalization drops unknown keys and repairs invalid values', () => {
     unknown: true,
     enabled: 'yes',
     sound: { enabled: 'no', preset: 'nope', volume: 9 },
-    popup: { enabled: 0 },
-    system: { enabled: true },
-    behavior: { maxVisibleCards: 99, completionAutoDismissMs: -5, includeSubagents: 'x' },
+    popup: { enabled: false },
+    system: { enabled: false },
+    behavior: { maxVisibleCards: 99 },
     scenarios: { approval: { sound: false } },
   })
   assert.equal(settings.enabled, true)
   assert.equal(settings.sound.enabled, true)
   assert.equal(settings.sound.preset, 'chime')
   assert.equal(settings.sound.volume, 1)
-  assert.equal(settings.popup.enabled, true)
-  assert.equal(settings.behavior.maxVisibleCards, 5)
-  assert.equal(settings.behavior.completionAutoDismissMs, 0)
-  assert.equal(settings.behavior.includeSubagents, false)
-  assert.deepEqual(settings.scenarios.approval, { sound: false, popup: true, system: true })
+  assert.equal('popup' in settings, false)
+  assert.equal('system' in settings, false)
   assert.equal('unknown' in settings, false)
+  assert.deepEqual(settings.scenarios.approval, { sound: false, notify: true })
 })
 
 test('partial merge keeps unrelated fields and merges one scenario', () => {
   const current = createDefaultSettings()
   const next = mergeSettings(current, {
     sound: { enabled: false },
-    scenarios: { approval: { popup: false } },
+    scenarios: { approval: { notify: false } },
   })
   assert.equal(next.sound.enabled, false)
   assert.equal(next.sound.preset, 'chime')
-  assert.equal(next.popup.enabled, true)
-  assert.deepEqual(next.scenarios.approval, { sound: true, popup: false, system: true })
-  assert.deepEqual(next.scenarios.question, { sound: true, popup: true, system: true })
+  assert.deepEqual(next.scenarios.approval, { sound: true, notify: false })
+  assert.deepEqual(next.scenarios.question, { sound: true, notify: true })
 })
 
 test('store persists updates and reloads them', () => {
@@ -71,12 +67,12 @@ test('store persists updates and reloads them', () => {
   const store = createSettingsStore(storage)
   assert.equal(store.getSnapshot().sound.preset, 'chime')
   store.update({ sound: { preset: 'pulse', volume: 0.4 } })
-  store.update({ behavior: { maxVisibleCards: 2 } })
-  const raw = storage.dump()[SETTINGS_KEY]
-  assert.ok(raw)
+  store.update({ scenarios: { completion: { notify: false } } })
+  assert.ok(storage.dump()[SETTINGS_KEY])
   const reloaded = createSettingsStore(storage)
   assert.equal(reloaded.getSnapshot().sound.preset, 'pulse')
-  assert.equal(reloaded.getSnapshot().behavior.maxVisibleCards, 2)
+  assert.equal(reloaded.getSnapshot().sound.volume, 0.4)
+  assert.deepEqual(reloaded.getSnapshot().scenarios.completion, { sound: true, notify: false })
   assert.equal(reloaded.getStatus().storageError, null)
 })
 

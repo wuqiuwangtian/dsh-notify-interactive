@@ -42,8 +42,7 @@ function approval(key = 'a1') {
 function createHarness(overrides = {}, options = {}) {
   const notificationStore = createNotificationStore()
   const soundCalls = []
-  const systemCalls = []
-  const activated = []
+  const windowsCalls = []
   let nowValue = 1_000
   const settingsStore = {
     getSnapshot: () => mergeSettings(createDefaultSettings(), overrides),
@@ -52,21 +51,19 @@ function createHarness(overrides = {}, options = {}) {
     settingsStore,
     notificationStore,
     soundPlayer: { play: (preset, volume) => soundCalls.push({ preset, volume }) },
-    systemNotifier: { show: (payload) => systemCalls.push(payload) },
     translate: (key) => key,
     resolveText: (value) => value?.en ?? '',
     getVisibility: () => options.visibility ?? 'hidden',
     getFocused: () => options.focused ?? false,
     isPopupOpen: () => options.popupOpen ?? false,
-    onActivate: (sessionId) => activated.push(sessionId),
+    onWindowsFallback: (payload) => windowsCalls.push(payload),
     now: () => nowValue,
   })
   return {
     engine,
     notificationStore,
     soundCalls,
-    systemCalls,
-    activated,
+    windowsCalls,
     advance(ms) {
       nowValue += ms
     },
@@ -110,87 +107,83 @@ test('diff removes a session that left the list', () => {
   assert.deepEqual(second.events.map((event) => event.type), ['session-removed'])
 })
 
-test('engine seeds the first snapshot and notifies on the next interaction', () => {
+test('engine seeds and uses the Windows fallback when the popup is closed', () => {
   const harness = createHarness()
   harness.engine.ingest(statusOf({ pendingInteraction: approval('a1') }), sessionsOf())
   assert.equal(harness.notificationStore.count(), 0)
   assert.equal(harness.soundCalls.length, 0)
-  assert.equal(harness.systemCalls.length, 0)
+  assert.equal(harness.windowsCalls.length, 0)
 
   harness.engine.ingest(statusOf({ pendingInteraction: approval('a2') }), sessionsOf())
+  assert.equal(harness.notificationStore.count(), 0)
+  assert.equal(harness.soundCalls.length, 1)
+  assert.equal(harness.windowsCalls.length, 1)
+  assert.equal(harness.windowsCalls[0].kind, 'approval')
+})
+
+test('engine adds a popup card when the popup is open', () => {
+  const harness = createHarness({}, { popupOpen: true })
+  harness.engine.ingest(statusOf({ pendingInteraction: approval('a1') }), sessionsOf())
+  harness.engine.ingest(statusOf({ pendingInteraction: approval('a2') }), sessionsOf())
   assert.equal(harness.notificationStore.count(), 1)
-  assert.equal(harness.notificationStore.getSnapshot()[0].kind, 'approval')
   assert.equal(harness.notificationStore.getSnapshot()[0].id, 'interaction:s1:a2')
   assert.equal(harness.soundCalls.length, 1)
-  assert.equal(harness.systemCalls.length, 1)
-  assert.equal(harness.systemCalls[0].kind, 'approval')
+  assert.equal(harness.windowsCalls.length, 0)
 
   harness.engine.ingest(statusOf({ pendingInteraction: undefined }), sessionsOf())
   assert.equal(harness.notificationStore.count(), 0)
 })
 
-test('engine suppresses the current focused session', () => {
+test('engine stays completely silent while focused on the current conversation', () => {
   const harness = createHarness({}, { focused: true, visibility: 'visible' })
   harness.engine.ingest(statusOf({ pendingInteraction: approval('a1') }), sessionsOf())
   harness.engine.ingest(statusOf({ pendingInteraction: approval('a2') }), sessionsOf())
   assert.equal(harness.notificationStore.count(), 0)
   assert.equal(harness.soundCalls.length, 0)
-  assert.equal(harness.systemCalls.length, 0)
+  assert.equal(harness.windowsCalls.length, 0)
 })
 
-test('engine ignores subagent sessions by default', () => {
+test('engine notifies another conversation while the page is focused elsewhere', () => {
+  const harness = createHarness({}, { focused: true, visibility: 'visible' })
+  harness.engine.ingest(statusOf({ pendingInteraction: approval('a1') }), sessionsOf({ main: false }))
+  harness.engine.ingest(statusOf({ pendingInteraction: approval('a2') }), sessionsOf({ main: false }))
+  assert.equal(harness.soundCalls.length, 1)
+  assert.equal(harness.windowsCalls.length, 1)
+})
+
+test('engine ignores subagent sessions', () => {
   const harness = createHarness()
   harness.engine.ingest(statusOf({ pendingInteraction: approval('a1') }), sessionsOf({ origin: 'subagent' }))
   harness.engine.ingest(statusOf({ pendingInteraction: approval('a2') }), sessionsOf({ origin: 'subagent' }))
   assert.equal(harness.notificationStore.count(), 0)
+  assert.equal(harness.windowsCalls.length, 0)
 })
 
-test('engine includes subagents when the preference is enabled', () => {
-  const harness = createHarness({ behavior: { includeSubagents: true } })
-  harness.engine.ingest(statusOf({ pendingInteraction: approval('a1') }), sessionsOf({ origin: 'subagent' }))
-  harness.engine.ingest(statusOf({ pendingInteraction: approval('a2') }), sessionsOf({ origin: 'subagent' }))
-  assert.equal(harness.notificationStore.count(), 1)
-})
+test('completion uses the popup or the Windows fallback and de-duplicates signals', () => {
+  const closed = createHarness()
+  closed.engine.ingest(statusOf({ running: true }), sessionsOf())
+  closed.engine.ingest(statusOf({ running: false }), sessionsOf())
+  assert.equal(closed.notificationStore.count(), 0)
+  assert.equal(closed.windowsCalls.length, 1)
+  assert.equal(closed.windowsCalls[0].kind, 'completion')
+  assert.equal(closed.soundCalls.length, 1)
 
-test('engine keeps the in-page card but skips the Windows toast while the page is active', () => {
-  const harness = createHarness({}, { focused: true, visibility: 'visible' })
-  harness.engine.ingest(statusOf({ running: true }), sessionsOf({ main: false }))
-  harness.engine.ingest(statusOf({ running: false }), sessionsOf({ main: false }))
-  assert.equal(harness.notificationStore.count(), 1)
-  assert.equal(harness.soundCalls.length, 1)
-  assert.equal(harness.systemCalls.length, 0)
-})
-
-test('engine skips the Windows toast when the interactive popup owns the surface', () => {
-  const harness = createHarness({}, { popupOpen: true })
-  harness.engine.ingest(statusOf({ running: true }), sessionsOf())
-  harness.engine.ingest(statusOf({ running: false }), sessionsOf())
-  assert.equal(harness.notificationStore.count(), 1)
-  assert.equal(harness.soundCalls.length, 1)
-  assert.equal(harness.systemCalls.length, 0)
-})
-
-test('engine creates a completion card and de-duplicates the two signals', () => {
-  const harness = createHarness()
-  harness.engine.ingest(statusOf({ running: true }), sessionsOf())
-  harness.engine.ingest(statusOf({ running: false }), sessionsOf())
-  assert.equal(harness.notificationStore.count(), 1)
-  assert.equal(harness.notificationStore.getSnapshot()[0].kind, 'completion')
-  assert.equal(harness.soundCalls.length, 1)
-  assert.equal(harness.systemCalls.length, 1)
-
-  // A second signal inside the cooldown must not add another card.
-  harness.engine.ingest(statusOf({ running: false, completionUnread: true }), sessionsOf())
-  assert.equal(harness.notificationStore.count(), 1)
-  assert.equal(harness.soundCalls.length, 1)
+  const open = createHarness({}, { popupOpen: true })
+  open.engine.ingest(statusOf({ running: true }), sessionsOf())
+  open.engine.ingest(statusOf({ running: false }), sessionsOf())
+  assert.equal(open.notificationStore.count(), 1)
+  assert.equal(open.notificationStore.getSnapshot()[0].kind, 'completion')
+  assert.equal(open.windowsCalls.length, 0)
+  assert.equal(open.soundCalls.length, 1)
 })
 
 test('engine clears cards when notifications are disabled', () => {
-  const harness = createHarness({ enabled: false })
+  const harness = createHarness({ enabled: false }, { popupOpen: true })
   harness.notificationStore.upsert({ id: 'existing', kind: 'completion', sessionId: 's1' })
   harness.engine.ingest(statusOf({ pendingInteraction: approval('a1') }), sessionsOf())
   assert.equal(harness.notificationStore.count(), 0)
   assert.equal(harness.soundCalls.length, 0)
+  assert.equal(harness.windowsCalls.length, 0)
 })
 
 test('engine reset re-baselines without replaying the same pending request', () => {
@@ -198,44 +191,13 @@ test('engine reset re-baselines without replaying the same pending request', () 
   harness.engine.ingest(statusOf({ pendingInteraction: approval('a1') }), sessionsOf())
   harness.engine.reset()
   harness.engine.ingest(statusOf({ pendingInteraction: approval('a1') }), sessionsOf())
-  assert.equal(harness.notificationStore.count(), 0)
+  assert.equal(harness.windowsCalls.length, 0)
   assert.equal(harness.soundCalls.length, 0)
 })
 
-test('gateChannels makes the in-page card primary while the page is active', () => {
+test('gateChannels only suppresses the focused current conversation', () => {
   const settings = createDefaultSettings()
-  const gate = gateChannels({
-    settings,
-    scenarioKey: 'completion',
-    sessionId: 's1',
-    mainSessionId: 's2',
-    visibility: 'visible',
-    focused: true,
-  })
-  assert.equal(gate.attended, false)
-  assert.equal(gate.pageActive, true)
-  assert.equal(gate.sound, true)
-  assert.equal(gate.popup, true)
-  assert.equal(gate.system, false)
-})
-
-test('gateChannels enables the Windows toast while the page is inactive', () => {
-  const settings = createDefaultSettings()
-  const gate = gateChannels({
-    settings,
-    scenarioKey: 'completion',
-    sessionId: 's1',
-    mainSessionId: 's2',
-    visibility: 'hidden',
-    focused: false,
-  })
-  assert.equal(gate.pageActive, false)
-  assert.equal(gate.system, true)
-})
-
-test('gateChannels suppresses everything for the current focused session', () => {
-  const settings = createDefaultSettings()
-  const gate = gateChannels({
+  const current = gateChannels({
     settings,
     scenarioKey: 'approval',
     sessionId: 's1',
@@ -243,28 +205,32 @@ test('gateChannels suppresses everything for the current focused session', () =>
     visibility: 'visible',
     focused: true,
   })
-  assert.equal(gate.attended, true)
-  assert.equal(gate.sound, false)
-  assert.equal(gate.popup, false)
-  assert.equal(gate.system, false)
-})
+  assert.equal(current.attended, true)
+  assert.equal(current.sound, false)
+  assert.equal(current.notify, false)
 
-test('gateChannels disables channels independently', () => {
-  const settings = mergeSettings(createDefaultSettings(), {
-    sound: { enabled: false },
-    scenarios: { approval: { system: false } },
+  const other = gateChannels({
+    settings,
+    scenarioKey: 'approval',
+    sessionId: 's2',
+    mainSessionId: 's1',
+    visibility: 'visible',
+    focused: true,
   })
-  const gate = gateChannels({
+  assert.equal(other.attended, false)
+  assert.equal(other.sound, true)
+  assert.equal(other.notify, true)
+
+  const unfocused = gateChannels({
     settings,
     scenarioKey: 'approval',
     sessionId: 's1',
-    mainSessionId: 's2',
+    mainSessionId: 's1',
     visibility: 'hidden',
     focused: false,
   })
-  assert.equal(gate.sound, false)
-  assert.equal(gate.popup, true)
-  assert.equal(gate.system, false)
+  assert.equal(unfocused.attended, false)
+  assert.equal(unfocused.notify, true)
 })
 
 test('findMainSessionId and truncate are stable helpers', () => {

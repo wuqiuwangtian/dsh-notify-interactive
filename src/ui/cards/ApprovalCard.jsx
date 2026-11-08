@@ -1,5 +1,4 @@
 import { createElement as h, useState } from 'react'
-import { AlertIcon } from '../icons.jsx'
 import { CardButton, CardShell } from './shared.jsx'
 
 /** One pending tool approval. */
@@ -40,8 +39,6 @@ export function ApprovalCard({ item, t, onOpenSession, onDismiss, resolveText })
   }
 
   return h(CardShell, {
-    tone: 'warn',
-    icon: h(AlertIcon, { size: 18 }),
     title: t('card.approval.title'),
     subtitle,
     sessionTitle: item.sessionTitle,
@@ -51,7 +48,6 @@ export function ApprovalCard({ item, t, onOpenSession, onDismiss, resolveText })
     onDismiss: () => onDismiss?.(item.id),
     dismissible: item.demo === true,
     demo: item.demo === true,
-    badge: h('span', { className: 'dni-badge dni-badge-warn' }, t('card.approval.waiting')),
     footer: h('div', { className: 'dni-card-actions-row' },
       h(CardButton, {
         variant: 'outline',

@@ -9,7 +9,7 @@ import { CompletionCard } from './CompletionCard.jsx'
  * The caller supplies the same handlers to the in-page overlay and the popup,
  * so a card answered in either surface behaves identically.
  */
-export function CardList({ items, t, settings, resolveText, onOpenSession, onDismiss }) {
+export function CardList({ items, t, resolveText, onOpenSession, onDismiss }) {
   if (!Array.isArray(items) || items.length === 0) return null
   return h('div', { className: 'dni-card-list' },
     items.map((item) => {
@@ -46,7 +46,6 @@ export function CardList({ items, t, settings, resolveText, onOpenSession, onDis
           key: item.id,
           item,
           t,
-          settings,
           onOpenSession,
           onDismiss,
         })

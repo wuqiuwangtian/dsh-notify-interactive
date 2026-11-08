@@ -14,10 +14,8 @@ export function usePendingSnapshot(pending) {
   )
 }
 
-/** One card frame shared by every notification kind. */
+/** One minimal card frame. */
 export function CardShell({
-  tone = 'info',
-  icon,
   title,
   subtitle,
   sessionTitle,
@@ -27,41 +25,36 @@ export function CardShell({
   onDismiss,
   dismissible = false,
   demo = false,
-  badge,
   children,
   footer,
 }) {
-  const head = h('div', { className: 'dni-card-head' },
-    h('div', { className: 'dni-card-icon', 'aria-hidden': true }, icon),
-    h('div', { className: 'dni-card-headtext' },
-      h('div', { className: 'dni-card-titleline' },
-        h('span', { className: 'dni-card-title' }, title),
-        demo ? h('span', { className: 'dni-badge dni-badge-neutral' }, t('card.demo')) : null,
-        badge ?? null,
+  return h('article', { className: 'dni-card', 'aria-label': title },
+    h('div', { className: 'dni-card-head' },
+      h('div', { className: 'dni-card-headtext' },
+        h('div', { className: 'dni-card-titleline' },
+          h('span', { className: 'dni-card-title' }, title),
+          demo ? h('span', { className: 'dni-demo' }, t('card.demo')) : null,
+        ),
+        subtitle !== undefined && subtitle !== null && subtitle !== ''
+          ? h('div', { className: 'dni-card-subtitle' }, subtitle)
+          : null,
+        sessionTitle !== undefined && sessionTitle !== null
+          ? (typeof onOpenSession === 'function'
+            ? h('button', {
+              type: 'button',
+              className: 'dni-session-link',
+              onClick: () => onOpenSession(sessionId),
+            }, sessionTitle)
+            : h('div', { className: 'dni-card-session' }, sessionTitle))
+          : null,
       ),
-      subtitle !== undefined && subtitle !== null && subtitle !== ''
-        ? h('div', { className: 'dni-card-subtitle' }, subtitle)
-        : null,
-      sessionTitle !== undefined && sessionTitle !== null
-        ? (typeof onOpenSession === 'function'
-          ? h('button', {
-            type: 'button',
-            className: 'dni-session-link',
-            onClick: () => onOpenSession(sessionId),
-            title: t('card.openSession'),
-          }, sessionTitle)
-          : h('div', { className: 'dni-card-session' }, sessionTitle))
+      dismissible
+        ? h(IconButton, {
+          label: t('card.dismiss'),
+          onClick: () => onDismiss?.(),
+        }, h(CloseIcon, { size: 14 }))
         : null,
     ),
-    dismissible
-      ? h(IconButton, {
-        label: t('card.dismiss'),
-        onClick: () => onDismiss?.(),
-      }, h(CloseIcon, { size: 14 }))
-      : null,
-  )
-  return h('article', { className: `dni-card dni-card-${tone}`, 'aria-label': title },
-    head,
     h('div', { className: 'dni-card-body' }, children),
     footer !== undefined && footer !== null
       ? h('footer', { className: 'dni-card-actions' }, footer)

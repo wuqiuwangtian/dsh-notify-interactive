@@ -6,25 +6,20 @@ import { createNotificationStore } from '../src/state/notifications.js'
 import { createDemoItems } from '../src/ui/cards/index.jsx'
 import { translate } from '../src/i18n/dict.js'
 import { Settings } from '../src/ui/Settings.jsx'
-import { Overlay } from '../src/ui/Overlay.jsx'
 import { PopupApp } from '../src/ui/PopupApp.jsx'
 
 const settingsStore = createSettingsStore(undefined)
 const notificationStore = createNotificationStore()
-const popupSnapshot = { open: false, backend: 'inpage', error: null }
-const popupListeners = new Set()
+const popupSnapshot = { open: true, backend: 'pip', error: null }
 const popupController = {
   getSnapshot: () => popupSnapshot,
-  subscribe(listener) {
-    popupListeners.add(listener)
-    return () => popupListeners.delete(listener)
-  },
+  subscribe: () => () => {},
   open: async () => popupSnapshot,
   close() {},
   focus() {},
   syncTheme() {},
   syncTitle() {},
-  isOpen: () => false,
+  isOpen: () => true,
   dispose() {},
 }
 
@@ -45,16 +40,12 @@ runtime.openSession = () => {}
 runtime.openPopup = async () => popupSnapshot
 runtime.closePopup = () => {}
 runtime.addDemo = () => {}
-runtime.systemNotifier = {
-  permission: () => 'default',
-  requestPermission: async () => 'granted',
-}
 runtime.soundPlayer = {
   isReady: () => false,
   play: () => false,
 }
+runtime.previewSound = async () => 'played'
 
-settingsStore.update({ behavior: { maxVisibleCards: 5 } })
 const demo = createDemoItems({ t: runtime.translate, sessionId: 's1', sessionTitle: '演示会话' })
 notificationStore.upsert(demo.approval)
 notificationStore.upsert(demo.question)
@@ -80,22 +71,16 @@ notificationStore.upsert({
 })
 
 const settingsHtml = renderToStaticMarkup(h(Settings))
-const overlayHtml = renderToStaticMarkup(h(Overlay))
 const popupHtml = renderToStaticMarkup(h(PopupApp))
 
 runtime.ctx.locale.getLocale = () => ({ active: 'en', locales: [], revision: 1 })
 const settingsHtmlEn = renderToStaticMarkup(h(Settings))
-runtime.ctx.locale.getLocale = () => ({ active: 'zh', locales: [], revision: 2 })
-runtime.setSurface?.('popup')
-const overlayHiddenHtml = renderToStaticMarkup(h(Overlay))
-runtime.setSurface?.('inpage')
 
 const checks = [
   ['settings title', settingsHtml.includes('互动提醒')],
   ['settings sound section', settingsHtml.includes('音效')],
+  ['settings popup section', settingsHtml.includes('交互弹窗')],
   ['settings english title', settingsHtmlEn.includes('Interactive notifications')],
-  ['overlay hidden while popup owns the surface', !overlayHiddenHtml.includes('需要你的批准')],
-  ['overlay approval card', overlayHtml.includes('需要你的批准')],
   ['popup question card', popupHtml.includes('需要你的回答')],
   ['popup completion card', popupHtml.includes('本轮已结束')],
   ['popup plan card', popupHtml.includes('计划审核')],
@@ -104,4 +89,4 @@ const failed = checks.filter(([, ok]) => !ok)
 if (failed.length > 0) {
   throw new Error(`render smoke failed: ${failed.map(([name]) => name).join(', ')}`)
 }
-console.log(`render smoke ok (settings ${settingsHtml.length}B, overlay ${overlayHtml.length}B, popup ${popupHtml.length}B)`)
+console.log(`render smoke ok (settings ${settingsHtml.length}B, popup ${popupHtml.length}B)`)

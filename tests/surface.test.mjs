@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createSurfaceStore } from '../src/state/surface.js'
 
-test('surface defaults to the in-page overlay', () => {
+test('surface defaults to no popup', () => {
   const store = createSurfaceStore()
   assert.equal(store.getSnapshot(), 'inpage')
   assert.equal(store.isPopup(), false)

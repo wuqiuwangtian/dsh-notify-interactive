@@ -5,20 +5,19 @@ import { createSettingsStore } from '../state/settings.js'
 import { createNotificationStore } from '../state/notifications.js'
 import { createPopupController } from '../state/popup.js'
 import { createSoundPlayer } from '../audio/sounds.js'
-import { createSystemNotifier } from '../system/notify.js'
 import { createEngine } from '../engine/engine.js'
 import { findMainSessionId, sessionTitleOf } from '../engine/suppression.js'
 import { createDemoItems } from '../ui/cards/index.jsx'
 import { POPUP_CSS } from '../ui/styles.js'
-import { Overlay } from '../ui/Overlay.jsx'
 import { Settings } from '../ui/Settings.jsx'
+import { createPresenceReporter } from './presence.js'
 
 /** Hard dependencies: slots, locale, the session list, and the session UI adapter. */
 export const inject = ['slots', 'locale', 'sessions', 'uiSession']
 
 /**
- * Browser half. It owns the settings, the notification engine, the in-page
- * overlay, the detached popup, and the Settings page.
+ * Browser half. It reports presence, owns the interactive popup, and falls
+ * back to the host's Windows popup when no interactive surface is available.
  * @param {object} ctx Client Cordis context.
  */
 export function apply(ctx) {
@@ -51,7 +50,6 @@ export function apply(ctx) {
   const settingsStore = createSettingsStore(storage)
   const notificationStore = createNotificationStore()
   const soundPlayer = createSoundPlayer()
-  const systemNotifier = createSystemNotifier()
   const popupController = createPopupController({
     document: globalThis.document,
     css: POPUP_CSS,
@@ -76,11 +74,43 @@ export function apply(ctx) {
     }
   }
 
+  function getMainSession() {
+    try {
+      const list = ctx.get('sessions')?.list?.getSnapshot?.()
+      const id = findMainSessionId(list)
+      return { id, title: id === undefined ? undefined : sessionTitleOf(list, id) }
+    } catch {
+      return { id: undefined, title: undefined }
+    }
+  }
+
+  /**
+   * Ask the host to show a Windows popup. Used only when the interactive
+   * popup is closed or unavailable; the Windows dialog is reminder-only.
+   */
+  function windowsFallback(payload) {
+    try {
+      const body = JSON.stringify({
+        kind: payload?.kind,
+        sessionId: payload?.sessionId,
+        title: payload?.title,
+        body: payload?.body,
+      })
+      globalThis.fetch?.('/dsh-notify-interactive/windows-notify', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body,
+        keepalive: true,
+      })?.catch?.(() => {})
+    } catch {
+      // A missing host route or fetch failure leaves the sound-only path.
+    }
+  }
+
   const engine = createEngine({
     settingsStore,
     notificationStore,
     soundPlayer,
-    systemNotifier,
     translate,
     resolveText,
     getVisibility: () => (typeof globalThis.document !== 'undefined' ? globalThis.document.visibilityState : 'visible'),
@@ -92,45 +122,23 @@ export function apply(ctx) {
       }
     },
     isPopupOpen: () => runtime.surfaceStore.isPopup(),
-    onActivate: (sessionId) => {
-      openSession(sessionId)
-      if (settingsStore.getSnapshot().popup.enabled && !popupController.isOpen()) {
-        popupController.open().catch(() => {})
-      }
-    },
+    onWindowsFallback: windowsFallback,
   })
 
   runtime.settingsStore = settingsStore
   runtime.notificationStore = notificationStore
   runtime.soundPlayer = soundPlayer
-  runtime.systemNotifier = systemNotifier
   runtime.popupController = popupController
   runtime.engine = engine
   runtime.translate = translate
   runtime.resolveText = resolveText
   runtime.openSession = openSession
+  runtime.getMainSession = getMainSession
+  runtime.windowsFallback = windowsFallback
   runtime.openPopup = () => popupController.open()
   runtime.closePopup = () => popupController.close()
   runtime.resetSettings = () => settingsStore.reset()
   runtime.previewSound = (preset, volume) => soundPlayer.preview(preset, volume)
-  runtime.requestNotificationPermission = () => systemNotifier.requestPermission()
-  runtime.testSystemNotification = () => {
-    systemNotifier.show({
-      title: translate('settings.title'),
-      body: translate('settings.testNotification'),
-      tag: 'dsh-notify-interactive-test',
-      kind: 'completion',
-    })
-  }
-  runtime.getMainSession = () => {
-    try {
-      const list = ctx.get('sessions')?.list?.getSnapshot?.()
-      const id = findMainSessionId(list)
-      return { id, title: id === undefined ? undefined : sessionTitleOf(list, id) }
-    } catch {
-      return { id: undefined, title: undefined }
-    }
-  }
   runtime.dismiss = (id) => notificationStore.remove(id)
   runtime.addDemo = (kind, info = {}) => {
     const item = createDemoItems({
@@ -141,7 +149,7 @@ export function apply(ctx) {
     if (item !== undefined) notificationStore.upsert(item)
   }
   runtime.ready = true
-  runtime.version = '0.1.4'
+  runtime.version = '0.2.0'
   try {
     // Diagnostics/support handle; the settings page is the normal entry point.
     globalThis.__dshNotifyInteractive = runtime
@@ -149,7 +157,31 @@ export function apply(ctx) {
     // A hardened page may forbid globals; the plugin still works.
   }
 
-  // Shared stylesheet for the in-page cards and the settings page.
+  // Presence lets the host know whether a web surface is currently connected.
+  // Without it, the host assumes CLI/TUI and uses the Windows popup fallback.
+  const presence = createPresenceReporter({
+    getState: () => {
+      const main = getMainSession()
+      return {
+        sessionId: main?.id,
+        focused: (() => {
+          try {
+            return globalThis.document?.hasFocus?.() ?? false
+          } catch {
+            return false
+          }
+        })(),
+        visible: globalThis.document?.visibilityState === 'visible',
+      }
+    },
+  })
+  runtime.presence = presence
+  ctx.effect(() => {
+    presence.start()
+    return () => presence.stop()
+  }, 'dsh-notify-interactive: presence')
+
+  // Shared stylesheet for the settings page and the popup.
   ctx.effect(() => {
     const style = globalThis.document.createElement('style')
     style.setAttribute('data-plugin', 'dsh-notify-interactive')
@@ -173,13 +205,10 @@ export function apply(ctx) {
   ctx.effect(() => () => {
     engine.dispose()
     popupController.dispose()
-    systemNotifier.closeAll()
     runtime.ready = false
   }, 'dsh-notify-interactive: runtime cleanup')
 
-  // The engine is driven by the same live services the sidebar uses, not by a
-  // slot component. That keeps notifications working even if the overlay
-  // entry is not currently rendering anything.
+  // The engine is driven by the same live services the sidebar uses.
   const uiSession = ctx.get('uiSession')
   const sessionsService = ctx.get('sessions')
   const ingest = () => {
@@ -187,6 +216,7 @@ export function apply(ctx) {
       const status = uiSession?.sessionStatus?.getSnapshot?.()
       if (status === undefined) return
       engine.ingest(status, sessionsService?.list?.getSnapshot?.())
+      presence.report()
     } catch {
       // A transient service replacement is retried by the next subscription tick.
     }
@@ -211,27 +241,17 @@ export function apply(ctx) {
     }
   }, 'dsh-notify-interactive: session status bridge')
 
-  // Turning the master switch or the popup channel off should not leave stale
-  // cards behind when it is turned back on later.
+  // Turning the master switch off clears live cards.
   ctx.effect(() => settingsStore.subscribe(() => {
-    const next = settingsStore.getSnapshot()
-    if (!next.enabled || !next.popup.enabled) {
+    if (!settingsStore.getSnapshot().enabled) {
       notificationStore.clear()
       engine.reset()
-      if (!next.popup.enabled) popupController.close()
     }
   }), 'dsh-notify-interactive: settings bridge')
 
   ctx.on('connection/reset', () => engine.reset())
   ctx.on('theme/change', () => popupController.syncTheme())
   ctx.on('locale/change', () => popupController.syncTitle())
-
-  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
-    name: 'shell.overlay',
-    id: 'notify-interactive.overlay',
-    order: 100,
-    label: () => translate('popup.title'),
-  }, (props) => createElement(Overlay, props)))
 
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',

@@ -34,19 +34,18 @@ export function scenarioForInteraction(interaction) {
 }
 
 /**
- * Whether the user is already looking at this exact session in a focused,
- * visible page. Focus + main view is the only case the plugin suppresses.
+ * Whether the user is focused on this exact conversation.
+ * This is the one rule the plugin uses to stay silent: focused page + visible +
+ * the event belongs to the session currently shown in the main view.
  */
 export function isAttended({
   visibility,
   focused,
   mainSessionId,
   sessionId,
-  suppressWhenFocused,
 }) {
   return Boolean(
-    suppressWhenFocused
-    && focused
+    focused
     && visibility === 'visible'
     && mainSessionId !== undefined
     && String(mainSessionId) === String(sessionId),
@@ -54,16 +53,14 @@ export function isAttended({
 }
 
 /**
- * Resolve the three independent delivery channels for one event.
+ * Resolve delivery for one event.
  *
- * Surface rule:
- * - The page is active (focused + visible): the in-page card is the primary
- *   surface; a Windows toast would duplicate it, so the system channel is off.
- * - The page is inactive: the system toast (or an already-open popup) is the
- *   outside alert; the in-page card remains a record for when the user returns.
+ * One rule: if the user is focused on the exact conversation, stay silent.
+ * Otherwise play the optional sound and deliver a notification through the
+ * best available surface (the engine chooses popup vs Windows fallback).
  *
  * @param {object} input settings, scenario key, focus state, and session identity.
- * @returns {{ attended: boolean, pageActive: boolean, sound: boolean, popup: boolean, system: boolean }}
+ * @returns {{ attended: boolean, sound: boolean, notify: boolean }}
  */
 export function gateChannels({
   settings,
@@ -73,23 +70,12 @@ export function gateChannels({
   visibility,
   focused,
 }) {
-  const scenario = settings?.scenarios?.[scenarioKey] ?? { sound: true, popup: true, system: true }
-  const attended = isAttended({
-    visibility,
-    focused,
-    mainSessionId,
-    sessionId,
-    suppressWhenFocused: settings?.behavior?.suppressWhenFocused !== false,
-  })
+  const scenario = settings?.scenarios?.[scenarioKey] ?? { sound: true, notify: true }
+  const attended = isAttended({ visibility, focused, mainSessionId, sessionId })
   const enabled = settings?.enabled !== false && !attended
-  const pageActive = Boolean(focused && visibility === 'visible')
   return {
     attended,
-    pageActive,
     sound: enabled && settings?.sound?.enabled !== false && scenario.sound !== false,
-    popup: enabled && settings?.popup?.enabled !== false && scenario.popup !== false,
-    // A Windows toast while the user is looking at DSH duplicates the in-page
-    // card; the popup-open check is applied by the engine as well.
-    system: enabled && !pageActive && settings?.system?.enabled !== false && scenario.system !== false,
+    notify: enabled && scenario.notify !== false,
   }
 }

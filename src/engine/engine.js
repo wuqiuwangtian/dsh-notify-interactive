@@ -1,9 +1,11 @@
 /**
  * Notification engine.
  *
- * One engine instance owns the per-session baseline, de-duplication, channel
- * gating, and the side effects for one browser tab. It never answers anything
- * by itself: only an explicit user click in a card does that.
+ * One rule decides silence: if the user is focused on the exact conversation,
+ * nothing happens. Otherwise the engine plays the optional sound and delivers
+ * the event through the best available surface:
+ * - the detached popup when it is already open (interactive);
+ * - otherwise the host's Windows popup fallback (reminder only).
  */
 
 import {
@@ -39,13 +41,12 @@ export function createEngine(options) {
     settingsStore,
     notificationStore,
     soundPlayer,
-    systemNotifier,
     translate,
     resolveText,
     getVisibility,
     getFocused,
     isPopupOpen = () => false,
-    onActivate,
+    onWindowsFallback,
     now = () => Date.now(),
   } = options
 
@@ -59,7 +60,7 @@ export function createEngine(options) {
   const visibility = () => (typeof getVisibility === 'function' ? getVisibility() : 'visible')
   const focused = () => (typeof getFocused === 'function' ? Boolean(getFocused()) : false)
 
-  function systemTitle(kind) {
+  function fallbackTitle(kind) {
     if (kind === 'approval') return t('notify.approval.title')
     if (kind === 'plan-review') return t('notify.plan.title')
     if (kind === 'completion') return t('notify.completion.title')
@@ -77,27 +78,19 @@ export function createEngine(options) {
     return truncate([sessionTitle, question].filter(Boolean).join(' · '))
   }
 
-  function scenarioOf(kind) {
-    if (kind === 'approval') return 'approval'
-    if (kind === 'plan-review') return 'planReview'
-    if (kind === 'completion') return 'completion'
-    return 'question'
+  function playSound(settings) {
+    if (settings.sound.enabled === false) return
+    if (settings.sound.preset === 'none') return
+    soundPlayer?.play?.(settings.sound.preset, settings.sound.volume)
   }
 
-  function notifySystem(kind, title, body, sessionId) {
-    if (systemNotifier === undefined || systemNotifier === null) return
-    systemNotifier.show({
+  function deliverWindows(kind, sessionId, sessionTitle, title, body) {
+    onWindowsFallback?.({
+      kind,
+      sessionId,
+      sessionTitle,
       title,
       body,
-      tag: `${sessionId}:${kind}`,
-      kind,
-      onClick: () => {
-        try {
-          onActivate?.(sessionId, kind)
-        } catch {
-          // A failed navigation must not break the notification click handler.
-        }
-      },
     })
   }
 
@@ -112,7 +105,7 @@ export function createEngine(options) {
     const sessionId = String(event.sessionId)
     const sessionTitle = sessionTitleOf(sessionList, sessionId)
 
-    if (!settings.behavior.includeSubagents && isSubagentSession(sessionList, sessionId)) return
+    if (isSubagentSession(sessionList, sessionId)) return
 
     const gate = gateChannels({
       settings,
@@ -122,12 +115,14 @@ export function createEngine(options) {
       visibility: visibility(),
       focused: focused(),
     })
-    if (!gate.sound && !gate.popup && !gate.system) return
+    if (!gate.sound && !gate.notify) return
 
-    const id = interactionNotificationId(sessionId, interaction.key)
-    if (gate.popup) {
+    if (gate.sound) playSound(settings)
+    if (!gate.notify) return
+
+    if (isPopupOpen()) {
       notificationStore.upsert({
-        id,
+        id: interactionNotificationId(sessionId, interaction.key),
         kind,
         scenario: scenarioKey,
         sessionId,
@@ -136,21 +131,18 @@ export function createEngine(options) {
         sticky: true,
         demo: false,
       })
+      return
     }
-    if (gate.sound && settings.sound.preset !== 'none') {
-      soundPlayer?.play?.(settings.sound.preset, settings.sound.volume)
-    }
-    if (gate.system && !isPopupOpen()) {
-      notifySystem(kind, systemTitle(kind), interactionBody(interaction, sessionTitle), sessionId)
-    }
+    deliverWindows(kind, sessionId, sessionTitle, fallbackTitle(kind), interactionBody(interaction, sessionTitle))
   }
 
   function handleCompletion(event, settings, sessionList, mainSessionId) {
     const sessionId = String(event.sessionId)
+    if (isSubagentSession(sessionList, sessionId)) return
+
     const timestamp = now()
     const last = completionCooldown.get(sessionId)
     if (last !== undefined && timestamp - last < COMPLETION_COOLDOWN_MS) return
-    if (!settings.behavior.includeSubagents && isSubagentSession(sessionList, sessionId)) return
 
     const gate = gateChannels({
       settings,
@@ -160,20 +152,21 @@ export function createEngine(options) {
       visibility: visibility(),
       focused: focused(),
     })
-    if (!gate.sound && !gate.popup && !gate.system) return
+    if (!gate.sound && !gate.notify) return
 
     completionCooldown.set(sessionId, timestamp)
-    const sequence = (completionSequence.get(sessionId) ?? 0) + 1
-    completionSequence.set(sessionId, sequence)
     const sessionTitle = sessionTitleOf(sessionList, sessionId)
-    const id = completionNotificationId(sessionId, sequence)
+    if (gate.sound) playSound(settings)
+    if (!gate.notify) return
 
-    if (gate.popup) {
+    if (isPopupOpen()) {
+      const sequence = (completionSequence.get(sessionId) ?? 0) + 1
+      completionSequence.set(sessionId, sequence)
       notificationStore.removeWhere(
         (item) => item.sessionId === sessionId && item.kind === 'completion',
       )
       notificationStore.upsert({
-        id,
+        id: completionNotificationId(sessionId, sequence),
         kind: 'completion',
         scenario: 'completion',
         sessionId,
@@ -182,29 +175,22 @@ export function createEngine(options) {
         completedAt: timestamp,
         demo: false,
       })
+      return
     }
-    if (gate.sound && settings.sound.preset !== 'none') {
-      soundPlayer?.play?.(settings.sound.preset, settings.sound.volume)
-    }
-    if (gate.system && !isPopupOpen()) {
-      notifySystem(
-        'completion',
-        systemTitle('completion'),
-        truncate([sessionTitle, t('notify.completion.body')].filter(Boolean).join(' · ')),
-        sessionId,
-      )
-    }
+    deliverWindows(
+      'completion',
+      sessionId,
+      sessionTitle,
+      fallbackTitle('completion'),
+      truncate([sessionTitle, t('notify.completion.body')].filter(Boolean).join(' · ')),
+    )
   }
 
   function clearInteractionCard(sessionId, interactionKey) {
     notificationStore.remove(interactionNotificationId(sessionId, interactionKey))
   }
 
-  /**
-   * Reconcile live interaction cards with the latest status snapshot.
-   * This keeps a card answerable across a reconnect while dropping cards whose
-   * request was answered in another surface.
-   */
+  /** Reconcile live popup cards with the latest status snapshot. */
   function reconcileInteractions(statusMap) {
     const snapshot = notificationStore.getSnapshot()
     for (const item of snapshot) {
@@ -225,11 +211,7 @@ export function createEngine(options) {
     }
   }
 
-  /**
-   * Ingest one SessionStatus snapshot.
-   * @param {Map<string, object>} status Snapshot from `useSessionStatus`.
-   * @param {object} sessionList Snapshot from `useSessions`.
-   */
+  /** Ingest one SessionStatus snapshot. */
   function ingest(status, sessionList) {
     if (status === lastStatus && sessionList === lastSessions) return
     lastStatus = status
