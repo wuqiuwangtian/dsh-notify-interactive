@@ -96,6 +96,13 @@ export function apply(ctx) {
         title: payload?.title,
         body: payload?.body,
         silent: payload?.silent === true,
+        url: (() => {
+          try {
+            return globalThis.location?.origin ?? ''
+          } catch {
+            return ''
+          }
+        })(),
       })
       globalThis.fetch?.('/dsh-notify-interactive/windows-notify', {
         method: 'POST',

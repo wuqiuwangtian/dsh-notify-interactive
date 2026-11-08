@@ -11,7 +11,7 @@
 
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { messageForEvent, popupPayload, popupScript, shouldAutoNotify } from './logic.js'
+import { messageForEvent, popupPayload, popupScript, shouldAutoNotify, truncate } from './logic.js'
 
 const PRESENCE_PATH = '/dsh-notify-interactive/presence'
 const WINDOWS_PATH = '/dsh-notify-interactive/windows-notify'
@@ -26,8 +26,8 @@ function resolvePowerShell() {
   return undefined
 }
 
-/** Show one Windows dialog. The process is detached so the host never waits. */
-function showWindowsPopup(title, body, silent = false) {
+/** Show one native WinForms reminder. Detached so the host never waits. */
+function showWindowsPopup(title, body, silent = false, url = '') {
   const executable = resolvePowerShell()
   if (executable === undefined) {
     if (!warnedMissingPowerShell) {
@@ -37,12 +37,19 @@ function showWindowsPopup(title, body, silent = false) {
     return false
   }
   try {
+    const script = popupScript(popupPayload(
+      title,
+      body,
+      silent,
+      typeof url === 'string' && url !== '' ? url : (process.env.DSH_WEB_URL ?? ''),
+    ))
+    const encoded = Buffer.from(script, 'utf16le').toString('base64')
     const child = spawn(executable, [
       '-NoProfile',
       '-WindowStyle',
       'Hidden',
-      '-Command',
-      popupScript(popupPayload(title, body, silent)),
+      '-EncodedCommand',
+      encoded,
     ], {
       detached: true,
       stdio: 'ignore',
@@ -96,7 +103,7 @@ export function apply(ctx) {
   let lastPresence = null
   const lastNotify = new Map()
 
-  function notifyOnce(sessionId, kind, title, body, silent = false) {
+  function notifyOnce(sessionId, kind, title, body, silent = false, url = '') {
     const now = Date.now()
     const key = `${sessionId}:${kind}`
     const last = lastNotify.get(key)
@@ -107,7 +114,7 @@ export function apply(ctx) {
         if (now - at > 10 * 60 * 1000) lastNotify.delete(entryKey)
       }
     }
-    return showWindowsPopup(title, body, silent)
+    return showWindowsPopup(title, body, silent, url)
   }
 
   async function presenceRoute(req, res) {
@@ -145,7 +152,10 @@ export function apply(ctx) {
       const kind = typeof body?.kind === 'string' ? body.kind : 'notice'
       const title = truncate(body?.title ?? 'DSH', 80)
       const text = truncate(body?.body ?? '', 500)
-      const shown = notifyOnce(sessionId, kind, title, text, body?.silent === true)
+      const requestedUrl = typeof body?.url === 'string' && /^https?:\/\//.test(body.url)
+        ? body.url
+        : (process.env.DSH_WEB_URL ?? '')
+      const shown = notifyOnce(sessionId, kind, title, text, body?.silent === true, requestedUrl)
       writeJson(res, 200, { shown })
     } catch {
       res.writeHead(400)

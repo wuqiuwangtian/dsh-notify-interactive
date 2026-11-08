@@ -86,15 +86,18 @@ test('reason labels and truncation are stable', () => {
 })
 
 
-test('popup payload round-trips Chinese text and the script embeds it', () => {
-  const payload = popupPayload('DSH 需要你', '会话 project：Bash 请求批准', true)
+test('popup payload round-trips Chinese text and the WinForms script embeds it', () => {
+  const payload = popupPayload('DSH 需要你', '会话 project：Bash 请求批准', true, 'http://127.0.0.1:3080')
   const decoded = JSON.parse(Buffer.from(payload, 'base64').toString('utf8'))
   assert.equal(decoded.title, 'DSH 需要你')
   assert.equal(decoded.body, '会话 project：Bash 请求批准')
   assert.equal(decoded.silent, true)
+  assert.equal(decoded.url, 'http://127.0.0.1:3080')
   const script = popupScript(payload)
   assert.ok(script.includes(payload))
   assert.match(script, /FromBase64String/)
-  assert.match(script, /WScript\.Shell/)
-  assert.match(script, /Popup/)
+  assert.match(script, /System\.Windows\.Forms/)
+  assert.match(script, /ShowDialog/)
+  assert.match(script, /Add_Click/)
+  assert.match(script, /打开 DSH/)
 })
