@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { createPreferences } from './preferences.js'
 import { createCoordinator } from './coordinator.js'
 import { channelPolicy, deliverNotification } from './delivery.js'
+import { createInteractionBroker } from './interactions.js'
 import { createCompanion, getCompanionStatus } from './companion.js'
 import { renderPresetToDataUrl } from '../audio/wav.js'
 import { SOUND_PRESETS } from '../audio/sounds.js'
@@ -118,7 +119,15 @@ export function applyHost(ctx, services = {}) {
   }
 
   const lastNotify = new Map()
-  const companion = services.companion ?? createCompanion()
+  const companion = services.companion ?? createCompanion({ onEvent: event => {
+    if (event.type === 'interaction') void interactions.submit(event).then(result => companion.interactionResult?.(event.id, event.actionId, result.status))
+  } })
+  const interactions = createInteractionBroker({ coordinator,
+    onUpdate: (eventId, view) => { void companion.updateInteraction?.(eventId, view) } })
+  // Also allow an injected transport to exercise the identical command path.
+  companion.onInteraction?.(async event => interactions.submit(event))
+  const interactionSweep = setInterval(() => interactions.sweep(), 1000)
+  interactionSweep.unref?.()
   const legacy = services.legacy ?? showWindowsPopup
   let companionWarning = ''
 
@@ -230,6 +239,21 @@ export function applyHost(ctx, services = {}) {
     } catch { writeJson(res, 503, { error: 'preferences-unavailable' }) }
   }
 
+  function interactionRoute(operation) {
+    return async (req, res) => {
+      if (!authorize(req, res)) return
+      if (req.method !== 'POST') { writeJson(res, 405, { error: 'method' }); return }
+      try {
+        const body = await readJson(req, 192000)
+        res.setHeader?.('cache-control', 'no-store')
+        if (operation === 'sync') { writeJson(res, 200, interactions.sync(body.clientId, body.registrations)); return }
+        if (body.instanceId !== interactions.instanceId) { writeJson(res, 409, { error: 'instance-changed' }); return }
+        if (operation === 'execute') writeJson(res, 200, { allowed: interactions.execute(body.clientId, body.id, body.token, body.eventId) })
+        else writeJson(res, 200, { accepted: interactions.result(body.clientId, body.id, body.status) })
+      } catch { writeJson(res, 400, { error: 'invalid-interaction' }) }
+    }
+  }
+
   async function dispatch(body, legacyClient = false) {
     if (typeof body.sessionId !== 'string' || !['approval', 'question', 'plan-review', 'completion'].includes(body.kind)) return { status: 400, shown: false, delivery: 'invalid-event' }
     const url = new URL(body.url)
@@ -247,10 +271,10 @@ export function applyHost(ctx, services = {}) {
     const text = truncate(body.body ?? '', 500)
     const prefix = `${sessionTitle} · `
     const result = await deliverNotification({ companion, available: services.available ?? getCompanionStatus().enabled,
-      legacy, policy,
+      legacy, policy, getInteraction: () => interactions.presentation(fact.id),
       getPolicy: () => { const value = channelPolicy(preferences.current(), body.kind, coordinator.attended(body.sessionId, fact.at)); if (legacyClient && body.silent) value.sound = false; return value },
       isCurrent: () => coordinator.resolve(body.sessionId, body.kind, body.callId)?.id === fact.id,
-      payload: { eventId: fact.id, sticky: body.kind !== 'completion', title: truncate(body.title ?? 'DSH', 80), sessionTitle,
+      payload: { eventId: fact.id, interaction: interactions.presentation(fact.id), sticky: body.kind !== 'completion', title: truncate(body.title ?? 'DSH', 80), sessionTitle,
         body: sessionTitle && text.startsWith(prefix) ? text.slice(prefix.length) : text,
         url: url.href, theme: body.theme ?? {}, openLabel: truncate(body.openLabel ?? 'DSH', 80), closeLabel: truncate(body.closeLabel ?? 'Close', 80), webPopup: body.webPopup === true },
     })
@@ -267,7 +291,7 @@ export function applyHost(ctx, services = {}) {
   }
 
   ctx.inject(['webServer'], (scope) => {
-    for (const [path, handler] of [['settings', settingsRoute], ['deliver', coordinatedDelivery]]) {
+    for (const [path, handler] of [['settings', settingsRoute], ['deliver', coordinatedDelivery], ['interactions', interactionRoute('sync')], ['interaction-execute', interactionRoute('execute')], ['interaction-result', interactionRoute('result')]]) {
       scope.effect(() => scope.webServer.register({ kind: 'exact', path: `/dsh-notify-interactive/${path}`, handler }), `dsh-notify-interactive: ${path}`)
     }
     scope.effect(() => scope.webServer.register({
@@ -296,6 +320,7 @@ export function applyHost(ctx, services = {}) {
     const before = ['approval', 'question', 'plan-review', 'completion'].map(kind => coordinator.resolve(session.id, kind)).filter(Boolean)
     const message = messageForEvent(session, event)
     const fact = coordinator.observe(session, event, message)
+    interactions.observe(fact)
     for (const old of before) if (coordinator.resolve(session.id, old.kind)?.id !== old.id) { void companion.withdraw?.(old.id); void companion.silence?.(old.id) }
     if (!fact) return
     const timer = setTimeout(async () => {
@@ -308,12 +333,12 @@ export function applyHost(ctx, services = {}) {
         const base = presentation?.url || process.env.DSH_WEB_URL || ''
         const url = base ? new URL(base) : null
         url?.searchParams.set('dsh-notify-session', String(session.id))
-        const payload = { eventId: fact.id, sticky: message.kind !== 'completion', title: message.title, sessionTitle: '', body: message.body,
+        const payload = { eventId: fact.id, interaction: interactions.presentation(fact.id), sticky: message.kind !== 'completion', title: message.title, sessionTitle: '', body: message.body,
           url: url?.href ?? 'http://localhost/', theme: presentation?.theme ?? {},
           openLabel: presentation?.openLabel ?? 'DSH', closeLabel: presentation?.closeLabel ?? 'Close' }
         const result = await deliverNotification({ companion, policy,
           available: Boolean(presentation) && (services.available ?? getCompanionStatus().enabled),
-          legacy, payload,
+          legacy, payload, getInteraction: () => interactions.presentation(fact.id),
           getPolicy: () => channelPolicy(preferences.current(), message.kind, coordinator.attended(session.id, fact.at)),
           isCurrent: () => coordinator.resolve(session.id, message.kind)?.id === fact.id })
         coordinator.finish(fact, result.delivery)
@@ -325,6 +350,8 @@ export function applyHost(ctx, services = {}) {
 
   ctx.effect(() => () => {
     for (const timer of timers) clearTimeout(timer)
+    clearInterval(interactionSweep)
+    interactions.dispose()
     coordinator.clear()
     companion.dispose()
     lastNotify.clear()

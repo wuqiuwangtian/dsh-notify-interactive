@@ -6,11 +6,11 @@ DSH Web reminders: stay silent while attending the relevant conversation, otherw
 
 ## Development status
 
-P2 development code targeting DSH 0.2.2-rc.1. Package version remains 0.2.1; these changes are unreleased.
+P3 answer-bridge development code targeting DSH 0.2.2-rc.1. Package version remains 0.2.1; these changes are unreleased.
 
-Approvals, questions, plan reviews and completion share host delivery claims and read-only desktop reminders. Popups and sound have independent global/per-event controls, including event-specific presets. Preferences migrate from localStorage to the current profile and use revisions to merge edits across tabs. Offline edits remain queued.
+Approvals, questions, plan reviews and completion share host delivery claims. Linked requests support Allow once/Reject, full question batches, single/multiple choices, custom text and explicit skipping. Plan reviews retain the original options and full plan. Popups and sound have independent global/per-event controls and presets. Preferences migrate to the current profile with revision-based merging; offline edits remain queued.
 
-**Desktop answering is not implemented.** Return to DSH to approve or answer; the previous manually opened browser answer window remains available. TUI, DSH Desktop and native Linux desktop acceptance are outside this iteration.
+**Desktop answering requires an authenticated, connected Web page owning the live Pending object.** Missing call IDs, repeated approvals on the same call ID or mismatched metadata remain reminder-only. Lost acknowledgements never replay answers; uncertain results require checking DSH. Drafts survive a temporary Web disconnect, but not a companion restart. TUI, DSH Desktop and native Linux acceptance are outside this iteration.
 
 The host only observes committed session/event messages. No automatic answers, session-log writes, prompt injection, model-tool registration or approval-waterfall interception. Plugin routes use DSH authentication, authority checks and owner admission.
 
@@ -40,9 +40,10 @@ Configure event channels in Interactive notifications. Confirm that profile pref
 pnpm verify
 pnpm companion:smoke
 pnpm coordination:smoke
+pnpm interaction:smoke
 ```
 
-Desktop smoke commands show real demo windows and play audio. Current checks include 87 passing tests and real Windows delivery smoke for channel combinations, deduplication, queuing and host takeover, with a mock DSH context/auth admission. Actual user sessions, browser/profile persistence and precise return navigation still require acceptance testing. See verification section 11.
+Desktop smoke commands show real synthetic windows and may play audio. Interaction smoke clicks the actual Windows renderer using a temporary loopback DevTools endpoint belonging only to its test process, with mock DSH context/auth and Pending objects; production does not open this endpoint. Actual user sessions and precise return navigation still require acceptance testing. See verification sections 11–12.
 
 Without the companion, the Windows fallback uses the existing PowerShell dialog/system sound; process startup does not prove visibility or matching synthesized sound presets. Native Linux remains unverified.
 

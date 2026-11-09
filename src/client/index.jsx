@@ -13,6 +13,7 @@ import { POPUP_CSS } from '../ui/styles.js'
 import { Settings } from '../ui/Settings.jsx'
 import { createPreferencesSync } from './preferences.js'
 import { createPresenceReporter } from './presence.js'
+import { createInteractionBridge } from './interactions.js'
 
 /** Hard dependencies: slots, locale, the session list, and the session UI adapter. */
 export const inject = ['slots', 'locale', 'sessions', 'uiSession']
@@ -61,6 +62,10 @@ export function apply(ctx) {
   const capability = globalThis.fetch('/dsh-notify-interactive/desktop-status', { cache: 'no-store' })
     .then(response => response.json()).then(value => { coordinated = value.scope === 'reminders' }).catch(() => {})
   const notificationStore = createNotificationStore()
+  const interactionBridge = createInteractionBridge({ clientId, resolveText,
+    getStatus: () => ctx.get('uiSession')?.sessionStatus?.getSnapshot?.(),
+    makeToken: () => `${clientId}-${Date.now()}-${Math.random().toString(36).slice(2)}` })
+  ctx.effect(() => { interactionBridge.start(); return () => interactionBridge.stop() }, 'dsh-notify-interactive: desktop interaction owner')
   const soundPlayer = createSoundPlayer()
   const popupController = createPopupController({
     document: globalThis.document,
@@ -160,6 +165,7 @@ export function apply(ctx) {
     onWindowsFallback: windowsFallback,
     onHostDelivery: async payload => {
       await capability
+      await interactionBridge.sync()
       if (coordinated !== false) return windowsFallback({ ...payload, coordinated: true })
       // Older hosts keep the legacy reminder path until reloaded.
       const settings = settingsStore.getSnapshot()
@@ -325,7 +331,7 @@ export function apply(ctx) {
     }
   }), 'dsh-notify-interactive: settings bridge')
 
-  ctx.on('connection/reset', () => engine.reset())
+  ctx.on('connection/reset', () => { engine.reset(); interactionBridge.reset() })
   ctx.on('theme/change', () => { cachedTheme = snapshotTheme(); popupController.syncTheme(); presence.report() })
   ctx.on('locale/change', () => popupController.syncTitle())
 

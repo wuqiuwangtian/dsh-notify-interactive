@@ -13,13 +13,13 @@ export function channelPolicy(settings, kind, attended = false) {
 }
 
 /** One coordinator claim encloses every effect, including sound and native fallback. */
-export async function deliverNotification({ companion, available, legacy, payload, policy, getPolicy, isCurrent = () => true }) {
+export async function deliverNotification({ companion, available, legacy, payload, policy, getPolicy, getInteraction, isCurrent = () => true }) {
   const currentPolicy = () => getPolicy?.() ?? policy
   function prepare() {
     const fresh = currentPolicy()
     if (!isCurrent() || (!fresh.popup && !fresh.sound)) return null
     const preset = SOUND_PRESETS.find(item => item.id === fresh.preset)
-    return { ...payload, popup: fresh.popup && !payload.webPopup,
+    return { ...payload, ...(getInteraction ? { interaction: getInteraction() } : {}), popup: fresh.popup && !payload.webPopup,
       audio: fresh.sound && preset ? renderPresetToDataUrl(preset) : '', volume: fresh.volume }
   }
   if (!prepare()) return { shown: false, delivery: 'suppressed' }

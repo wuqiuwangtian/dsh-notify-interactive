@@ -7,6 +7,7 @@ function validateDelivery(message) {
   if (message.eventId !== undefined && (typeof message.eventId !== 'string' || message.eventId.length > 2048)) return false
   if (message.sessionTitle !== undefined && (typeof message.sessionTitle !== 'string' || message.sessionTitle.length > 200)) return false
   if (message.closeLabel !== undefined && (typeof message.closeLabel !== 'string' || message.closeLabel.length > 80)) return false
+  if (message.interaction != null && !validateInteraction(message.interaction)) return false
   if (!Number.isFinite(message.volume) || message.volume < 0 || message.volume > 1) return false
   if (typeof message.audio !== 'string' || message.audio.length > 200000 || (message.audio !== '' && !/^data:audio\/wav;base64,[A-Za-z0-9+/=]+$/.test(message.audio))) return false
   if (typeof message.url !== 'string' || message.url.length > 4000) return false
@@ -18,4 +19,11 @@ function validateDelivery(message) {
   const entries = Object.entries(message.theme)
   return entries.length <= 100 && entries.every(([name, value]) => /^--(?:dsw|dsh|ds)-[a-zA-Z0-9-]+$/.test(name) && typeof value === 'string' && value.length <= 512 && !/url\s*\(/i.test(value))
 }
-module.exports = { validateDelivery }
+function validateInteraction(value) {
+  if (!value || JSON.stringify(value).length > 52000) return false
+  if (!['instanceId', 'eventId', 'token', 'callId'].every(key => typeof value[key] === 'string' && value[key].length <= 2048)) return false
+  if (value.kind === 'approval') return typeof value.toolName === 'string' && typeof value.description === 'string'
+  return ['question', 'plan-review'].includes(value.kind) && Array.isArray(value.questions) && value.questions.length > 0 && value.questions.length <= 32 &&
+    value.questions.every(q => typeof q.id === 'string' && typeof q.question === 'string' && Array.isArray(q.options) && q.options.length <= 64 && q.options.every(o => typeof o.label === 'string'))
+}
+module.exports = { validateDelivery, validateInteraction }

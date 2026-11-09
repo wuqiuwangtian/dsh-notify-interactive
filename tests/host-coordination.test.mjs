@@ -70,7 +70,7 @@ test('persisted disabled settings control host delivery even if a stale client a
 test('unauthenticated requests cannot read preferences, change focus or trigger delivery', async () => {
   const h = harness(401)
   try {
-    for (const [path, method] of [['settings', 'GET'], ['settings', 'POST'], ['presence', 'POST'], ['deliver', 'POST'], ['desktop-status', 'GET'], ['windows-notify', 'POST']]) {
+    for (const [path, method] of [['settings', 'GET'], ['settings', 'POST'], ['presence', 'POST'], ['deliver', 'POST'], ['desktop-status', 'GET'], ['windows-notify', 'POST'], ['interactions', 'POST'], ['interaction-execute', 'POST'], ['interaction-result', 'POST']]) {
       assert.equal((await h.request(path, method, body)).status, 401)
     }
     assert.equal(h.effects.length, 0)

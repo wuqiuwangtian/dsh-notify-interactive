@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain, screen, shell, Menu } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
 const { randomUUID } = require('node:crypto')
-const { validateDelivery } = require('./protocol.cjs')
+const { validateDelivery, validateInteraction } = require('./protocol.cjs')
 const mailbox = process.argv.find(value => value.startsWith('--dsh-notify-mailbox='))?.slice('--dsh-notify-mailbox='.length)
 if (!mailbox) app.exit(1)
 const send = value => {
@@ -20,6 +20,12 @@ const seen = new Set()
 const revoked = new Set()
 const queue = []
 const audioOnly = new Set()
+const actions = new Map()
+let focusSequence = 0
+function reportFocus(action) {
+  focusSequence = Math.max(focusSequence + 1, Date.now())
+  if (current?.interaction) send({ ...current.interaction, type: 'interaction', id: current.id, actionId: randomUUID(), action, sequence: focusSequence })
+}
 const userData = path.join(app.getPath('temp'), `dsh-notify-${randomUUID()}`)
 app.setPath('userData', userData)
 app.on('quit', () => {
@@ -36,7 +42,10 @@ function pump() {
   awaitingRender = true
   win.webContents.send('reminder', current)
 }
-function hide() { clearTimeout(closeTimer); win?.hide(); current = undefined; awaitingRender = false; pump() }
+function hide() {
+  reportFocus('blur')
+  clearTimeout(closeTimer); win?.hide(); current = undefined; awaitingRender = false; pump()
+}
 
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null)
@@ -50,6 +59,10 @@ app.whenReady().then(async () => {
   win.webContents.on('will-navigate', event => event.preventDefault())
   win.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
   win.on('close', event => { if (!quitting) { event.preventDefault(); hide() } })
+  win.on('focus', () => reportFocus('focus'))
+  win.on('blur', () => reportFocus('blur'))
+  const focusHeartbeat = setInterval(() => { if (win?.isFocused() && current?.interaction) reportFocus('focus') }, 3000)
+  app.once('before-quit', () => clearInterval(focusHeartbeat))
   win.webContents.on('render-process-gone', () => { send({ type: 'failed', id: current?.id, reason: 'renderer-exited' }); app.quit() })
   const fromWindow = event => event.sender === win.webContents && event.senderFrame === win.webContents.mainFrame
   ipcMain.on('ready', event => {
@@ -66,6 +79,19 @@ app.whenReady().then(async () => {
           if (contents.length > 256000) { send({ type: 'failed', reason: 'message-too-large' }); continue }
           const message = JSON.parse(contents)
           if (message.type === 'shutdown') { app.quit(); return }
+          if (message.type === 'interaction-result') {
+            const action = actions.get(message.actionId)
+            if (action && action.id === message.id) { clearTimeout(action.timer); actions.delete(message.actionId); action.resolve({ status: message.status }) }
+            continue
+          }
+          if (message.type === 'interaction-update' && typeof message.eventId === 'string' && (message.interaction === null || validateInteraction(message.interaction))) {
+            for (const item of queue) if (item.eventId === message.eventId) item.interaction = message.interaction
+            if (current?.eventId === message.eventId) {
+              current.interaction = message.interaction
+              win.webContents.send('reminder', { type: 'interaction-update', id: current.id, interaction: message.interaction })
+            }
+            continue
+          }
           if (message.type === 'silence' && typeof message.eventId === 'string') {
             for (const item of queue) if (item.eventId === message.eventId) item.audio = ''
             win.webContents.send('reminder', { type: 'silence', eventId: message.eventId })
@@ -106,7 +132,19 @@ app.whenReady().then(async () => {
     }
     if (current?.id !== id) return
     awaitingRender = false
-    if (Number.isFinite(report.height)) win.setSize(360, Math.max(96, Math.min(360, report.height)))
+    if (Number.isFinite(report.height)) {
+      const width = report.width === 420 ? 420 : 360
+      const height = Math.max(96, Math.min(620, report.height))
+      const previous = win.getSize()
+      if (previous[0] !== width || previous[1] !== height) {
+        // Windows keeps fixed-window tracking limits at the previous size.
+        // Unlock only while applying the content's dimensions, then restore it.
+        win.setResizable(true)
+        win.setMinimumSize(1, 1)
+        win.setSize(width, height)
+        win.setResizable(false)
+      }
+    }
     if (current.popup !== false) {
       const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea
       const [width, height] = win.getSize()
@@ -115,7 +153,18 @@ app.whenReady().then(async () => {
       win.showInactive()
     } else win.hide()
     send({ type: 'rendered', id, visible: win.isVisible(), focused: win.isFocused(), bounds: win.getBounds(), scaleFactor: screen.getDisplayMatching(win.getBounds()).scaleFactor })
-    if (!current.sticky) closeTimer = setTimeout(hide, 8000)
+    if (!current.sticky) { clearTimeout(closeTimer); closeTimer = setTimeout(hide, 8000) }
+  })
+  ipcMain.handle('interaction', (event, packet) => {
+    if (!fromWindow(event) || current?.id !== packet?.id || !current.interaction || current.interaction.blocked ||
+      !['answer', 'focus', 'blur', 'engage', 'take-time'].includes(packet.action) || JSON.stringify(packet).length > 64000) return { status: 'unavailable' }
+    const actionId = randomUUID()
+    const reminder = current
+    return new Promise(resolve => {
+      const timer = setTimeout(() => { actions.delete(actionId); resolve({ status: 'uncertain' }) }, 13000)
+      actions.set(actionId, { id: reminder.id, resolve, timer })
+      send({ ...reminder.interaction, type: 'interaction', id: reminder.id, actionId, action: packet.action, answer: packet.answer })
+    })
   })
   ipcMain.on('audio-result', (event, value) => {
     if (fromWindow(event) && seen.has(value?.id)) send({ type: 'audio', id: value.id, played: value.played === true })

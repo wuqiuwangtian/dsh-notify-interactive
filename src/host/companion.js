@@ -81,7 +81,7 @@ export function createCompanion(options = {}) {
               const path = join(directory, name)
               const contents = await readFile(path, 'utf8')
               await rm(path)
-              if (contents.length > 16000) continue
+              if (contents.length > 192000) continue
               const event = JSON.parse(contents)
               if (event.type === 'ready' && event.protocol === 1) { clearTimeout(startupTimer); ready(connection) }
               if (event.type === 'queued') settle(event.id, { status: 'queued' })
@@ -123,6 +123,12 @@ export function createCompanion(options = {}) {
     },
     silence(eventId) {
       if (active && !active.stopped) return command(active, { type: 'silence', eventId }).catch(() => {})
+    },
+    updateInteraction(eventId, interaction) {
+      if (active && !active.stopped) return command(active, { type: 'interaction-update', eventId, interaction }).catch(() => {})
+    },
+    interactionResult(id, actionId, status) {
+      if (active && !active.stopped) return command(active, { type: 'interaction-result', id, actionId, status }).catch(() => {})
     },
     withdraw(eventId) {
       if (active && !active.stopped) return command(active, { type: 'withdraw', eventId }).catch(() => {})

@@ -120,3 +120,13 @@ GitHub 运行时下载首次返回 504；改用 `ELECTRON_MIRROR=https://npmmirr
 - question key 含 sessionId/callId；tool/result 的 pending:true 表示 continued，不能当成已解决；user/message.source.kind=user-question-reply 及 source.callId 使该问题失效。P2 只读观察这些已提交事件，不发用户消息、不监听新的 waterfall。
 
 实现效果与边界：同一事件共享弹窗/音效认领，旧页面 windows-notify 和新 deliver 路径也共享；主视图焦点需事件后的 heartbeat 证明，不能仅凭在线状态。读取 profile 失败时报告未同步，不覆盖损坏文件。P3 仍需要活跃 Web Pending 对象的注册、显式回答确认与失效校验，本轮没有增加回答端点。
+
+## 10. P3 Web Pending 桥接的依据与保守边界
+
+本地同版公开类型及实现复核：PendingApproval 的公开请求字段没有宿主 approval/asked.id，只有 callId/toolName/reason 与页面本地 key；answerable 在回答、撤回或 transport/scope 终止后变为 false。PendingQuestion.kind 由完整批次的 planReviewOf 判定，snapshot 暴露 channel/closed/countdown，answer 仅走现有 waterfall 或 continued/rpc；前者本地解决 promise，不单独保证宿主已持久接受。
+
+因此宿主以事件 ID 绑定 Web 随对象生成的 token；callId + 审批 toolName/reason 必须匹配，且运行期同一 callId 出现多个审批 ID 时不允许桌面作答。缺 callId 同样只提醒，不能把本地 key 伪装成全局请求 ID。跟踪表有容量上限，无法继续证明审批唯一时降为只读。
+
+新注册/命令/执行许可/结果路由均复用 connection owner 认证；辅助程序只通过原有随机 mailbox 回传显式动作。Web 调用前检查同一 Pending 对象、原始 key、session、事件、实例、完整问题内容和当前可答通道；命令只交付一次，授权执行后的丢失确认不自动重试。Web 连接 TTL 为 8 秒，命令等待 10 秒；窗口自身不运行 DSH API，不构造 session 用户消息。
+
+桌面获得焦点、编辑或点击“慢慢回答”才分别委派 holdFocus/engage/takeTime；失焦/关闭使用 releaseFocus，不调用取消或拒绝。焦点命令有序号，旧 focus 不能覆盖新 blur；Web 运行期间丢失桌面焦点心跳约 8 秒后释放该桥接获得的 focus。临时断线/通道切换保留窗口输入，辅助程序重启不持久保存答案草稿。实际验证与未验收项见 verification 第 12 节。

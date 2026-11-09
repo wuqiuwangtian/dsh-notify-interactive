@@ -47,7 +47,8 @@ export function createCoordinator({ now = Date.now, ttl = PRESENCE_TTL_MS } = {}
     if (identity === undefined) return
     const id = JSON.stringify([sessionId, message.kind, identity])
     if (events.has(id)) return events.get(id).fact
-    const fact = { id, sessionId, kind: message.kind, callId: data.callId, at: now(), message }
+    const fact = { id, sessionId, kind: message.kind, callId: data.callId, at: now(), message,
+      ...(message.kind === 'approval' ? { approval: { toolName: data.toolName, reason: data.reason ?? '' } } : {}) }
     facts.set(keyOf(sessionId, message.kind), fact)
     events.set(id, { fact, status: 'waiting' })
     while (events.size > 512) {

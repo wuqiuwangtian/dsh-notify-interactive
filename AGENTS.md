@@ -8,7 +8,7 @@
 
 2026-11-09：已授权开始 P0 调查与开发。0.2.1 仍是受限实现，尚未完成基础体验；不要将旧“第一阶段完成”当成验收结论。有效目标、待定方案和 P0–P5 计划见 `docs/requirements.md`；现状证据见 `docs/research.md`。
 
-P2 开发代码已提供宿主统一投递、profile 设置与 Windows 自绘只读提醒，无 Linux 原生桌面验收；用户已确认继续使用浏览器并接受桌面辅助程序；不要求换客户端。本轮重点为 Arch WSL DSH Web → Windows；TUI 与 DSH Desktop 不扩展。Linux 原生桌面后续验收。四类事件的 Electron 只读提醒安装后自动启用，`DSH_NOTIFY_COMPANION=0` 强制回退，尚非完整新方案。
+P2 已提供统一投递与 profile 设置；P3 开发代码增加 Windows 桌面人工应答桥接，需要在线且已认证的 Web 页面持有当前 Pending。真实用户会话与 Linux 原生桌面未验收；用户继续使用浏览器并接受辅助程序，不要求换客户端。本轮重点为 Arch WSL DSH Web → Windows；TUI 与 DSH Desktop 不扩展。辅助程序安装后自动启用，`DSH_NOTIFY_COMPANION=0` 强制回退。
 
 ## 关键约束
 
@@ -29,9 +29,11 @@ P2 开发代码已提供宿主统一投递、profile 设置与 Windows 自绘只
 - `src/ui/`：设置页 + 极简弹窗卡片。
 - `src/state/`：设置、通知队列、弹窗控制器、surface 标志。
 - `src/audio/`：Web Audio 合成 + WAV 兜底。
-- `companion/`：四类事件的只读提醒 Electron 窗口/队列；由 `src/host/companion.js` 使用连接隔离文件邮箱管理，不开放额外端口。
+- `companion/`：Electron 提醒窗口/交互表单/队列；由 `src/host/companion.js` 使用连接隔离文件邮箱管理，正式路径不开放额外端口。
+- `src/host/interactions.js` + `src/client/interactions.js` + `src/interaction/schema.js`：将显式桌面动作交给唯一在线 Web Pending 所有者；只交付一次，复核实例/会话/请求/对象/key/状态，未确认的提交禁止自动重放。审批缺 callId、同 callId 重复或元数据不匹配时只提醒。
 - `src/client/preferences.js` 与 `src/host/preferences.js`：schema v3 的 localStorage 首次迁移与 profile 原子持久化，revision 冲突只重放局部修改。
 - `pnpm coordination:smoke`：真实 Windows 通道组合/去重/排队/宿主接管，mock 的仅是 DSH 上下文与 owner admission，不等同真实登录会话。
+- `pnpm interaction:smoke`：真实 Windows renderer 按钮 + 构建后 Host + 模拟 Web Pending；只为该独立测试进程临时开启 loopback DevTools，结束清理。截图位于 /tmp；不能把模拟应答说成真实用户请求通过。
 - `pnpm companion:install` 在 WSL 下载并复制 Windows 运行时至 LocalAppData（需要 Node >=22.12）；不要提交二进制或 `.runtime.json`。改窗口文件后需重新 staging，详见 verification。
 
 ## 构建与验证
