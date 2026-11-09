@@ -8,6 +8,7 @@ function validateDelivery(message) {
   if (message.sessionTitle !== undefined && (typeof message.sessionTitle !== 'string' || message.sessionTitle.length > 200)) return false
   if (message.closeLabel !== undefined && (typeof message.closeLabel !== 'string' || message.closeLabel.length > 80)) return false
   if (message.interaction != null && !validateInteraction(message.interaction)) return false
+  if (message.interactionRevision !== undefined && (!Number.isSafeInteger(message.interactionRevision) || message.interactionRevision < 0)) return false
   if (!Number.isFinite(message.volume) || message.volume < 0 || message.volume > 1) return false
   if (typeof message.audio !== 'string' || message.audio.length > 200000 || (message.audio !== '' && !/^data:audio\/wav;base64,[A-Za-z0-9+/=]+$/.test(message.audio))) return false
   if (typeof message.url !== 'string' || message.url.length > 4000) return false
@@ -26,4 +27,24 @@ function validateInteraction(value) {
   return ['question', 'plan-review'].includes(value.kind) && Array.isArray(value.questions) && value.questions.length > 0 && value.questions.length <= 32 &&
     value.questions.every(q => typeof q.id === 'string' && typeof q.question === 'string' && Array.isArray(q.options) && q.options.length <= 64 && q.options.every(o => typeof o.label === 'string'))
 }
-module.exports = { validateDelivery, validateInteraction }
+/** Mailbox filenames are random: use versions, never directory enumeration order. */
+function createInteractionState(limit = 512) {
+  const latest = new Map()
+  return {
+    update(message, floor = 0) {
+      const revision = message.interactionRevision
+      if (typeof message.eventId !== 'string' || !Number.isSafeInteger(revision) || revision <= Math.max(floor, latest.get(message.eventId)?.interactionRevision ?? 0)) return false
+      latest.delete(message.eventId)
+      latest.set(message.eventId, { interaction: message.interaction, interactionRevision: revision })
+      while (latest.size > limit) latest.delete(latest.keys().next().value)
+      return true
+    },
+    decorate(message) {
+      const known = latest.get(message.eventId)
+      if (known && known.interactionRevision > (message.interactionRevision ?? 0)) return { ...message, ...known }
+      this.update(message)
+      return message
+    },
+  }
+}
+module.exports = { validateDelivery, validateInteraction, createInteractionState }

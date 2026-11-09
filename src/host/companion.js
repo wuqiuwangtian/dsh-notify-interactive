@@ -31,6 +31,7 @@ export function createCompanion(options = {}) {
   let starting
   let active
   let disposed = false
+  let interactionRevision = 0
 
   function settle(id, result) {
     const item = pending.get(id)
@@ -114,6 +115,7 @@ export function createCompanion(options = {}) {
       catch (error) { return { status: 'unavailable', reason: error.message } }
       if (disposed || active !== connection) return { status: 'unavailable', reason: 'companion-disconnected' }
       if (prepare) { payload = prepare(); if (!payload) return { status: 'suppressed' } }
+      if (payload.eventId) payload = { ...payload, interactionRevision: ++interactionRevision }
       const id = randomUUID()
       return new Promise(resolveResult => {
         const timer = setTimeout(() => settle(id, { status: 'uncertain', reason: 'delivery-timeout' }), options.deliveryMs ?? 5000)
@@ -125,7 +127,8 @@ export function createCompanion(options = {}) {
       if (active && !active.stopped) return command(active, { type: 'silence', eventId }).catch(() => {})
     },
     updateInteraction(eventId, interaction) {
-      if (active && !active.stopped) return command(active, { type: 'interaction-update', eventId, interaction }).catch(() => {})
+      const revision = ++interactionRevision
+      if (active && !active.stopped) return command(active, { type: 'interaction-update', eventId, interaction, interactionRevision: revision }).catch(() => {})
     },
     interactionResult(id, actionId, status) {
       if (active && !active.stopped) return command(active, { type: 'interaction-result', id, actionId, status }).catch(() => {})

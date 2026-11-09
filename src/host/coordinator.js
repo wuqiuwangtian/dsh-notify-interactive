@@ -1,4 +1,5 @@
 import { PRESENCE_TTL_MS } from './logic.js'
+import { questionsKey } from '../interaction/schema.js'
 
 /** One host owns event identity, attention and the delivery claim across Web tabs. */
 export function createCoordinator({ now = Date.now, ttl = PRESENCE_TTL_MS } = {}) {
@@ -26,11 +27,15 @@ export function createCoordinator({ now = Date.now, ttl = PRESENCE_TTL_MS } = {}
       return
     }
     if (event.type === 'tool/result') {
+      const result = event.data?.message
+      const callId = result?.toolCallId ?? result?.source?.callId ?? event.data?.callId
+      const content = typeof result?.content === 'string' ? result.content : Array.isArray(result?.content)
+        ? result.content.filter(block => block.type === 'text').map(block => block.text).join('') : ''
       let continued = false
-      try { continued = JSON.parse(event.data?.message?.content).pending === true } catch { /* Non-question results are ordinary tool text. */ }
+      try { continued = JSON.parse(content).pending === true } catch { /* Non-question results are ordinary tool text. */ }
       if (!continued) for (const kind of ['approval', 'question', 'plan-review']) {
         const fact = facts.get(keyOf(sessionId, kind))
-        if (fact?.callId && String(fact.callId) === String(event.data?.callId)) facts.delete(keyOf(sessionId, kind))
+        if (fact?.callId && String(fact.callId) === String(callId)) facts.delete(keyOf(sessionId, kind))
       }
       return
     }
@@ -47,7 +52,11 @@ export function createCoordinator({ now = Date.now, ttl = PRESENCE_TTL_MS } = {}
     if (identity === undefined) return
     const id = JSON.stringify([sessionId, message.kind, identity])
     if (events.has(id)) return events.get(id).fact
-    const fact = { id, sessionId, kind: message.kind, callId: data.callId, at: now(), message,
+    let questionKey = ''
+    if (message.kind === 'question') {
+      try { questionKey = questionsKey(JSON.parse(data.arguments).questions) } catch { /* Unparseable requests remain reminder-only. */ }
+    }
+    const fact = { id, sessionId, kind: message.kind, callId: data.callId, at: now(), message, questionKey,
       ...(message.kind === 'approval' ? { approval: { toolName: data.toolName, reason: data.reason ?? '' } } : {}) }
     facts.set(keyOf(sessionId, message.kind), fact)
     events.set(id, { fact, status: 'waiting' })

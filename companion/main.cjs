@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain, screen, shell, Menu } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
 const { randomUUID } = require('node:crypto')
-const { validateDelivery, validateInteraction } = require('./protocol.cjs')
+const { validateDelivery, validateInteraction, createInteractionState } = require('./protocol.cjs')
 const mailbox = process.argv.find(value => value.startsWith('--dsh-notify-mailbox='))?.slice('--dsh-notify-mailbox='.length)
 if (!mailbox) app.exit(1)
 const send = value => {
@@ -21,6 +21,7 @@ const revoked = new Set()
 const queue = []
 const audioOnly = new Set()
 const actions = new Map()
+const interactionState = createInteractionState()
 let focusSequence = 0
 function reportFocus(action) {
   focusSequence = Math.max(focusSequence + 1, Date.now())
@@ -77,7 +78,7 @@ app.whenReady().then(async () => {
           const contents = fs.readFileSync(file, 'utf8')
           fs.unlinkSync(file)
           if (contents.length > 256000) { send({ type: 'failed', reason: 'message-too-large' }); continue }
-          const message = JSON.parse(contents)
+          let message = JSON.parse(contents)
           if (message.type === 'shutdown') { app.quit(); return }
           if (message.type === 'interaction-result') {
             const action = actions.get(message.actionId)
@@ -85,7 +86,11 @@ app.whenReady().then(async () => {
             continue
           }
           if (message.type === 'interaction-update' && typeof message.eventId === 'string' && (message.interaction === null || validateInteraction(message.interaction))) {
-            for (const item of queue) if (item.eventId === message.eventId) item.interaction = message.interaction
+            const matching = queue.filter(item => item.eventId === message.eventId)
+            if (current?.eventId === message.eventId) matching.push(current)
+            const floor = Math.max(0, ...matching.map(item => item.interactionRevision ?? 0))
+            if (!interactionState.update(message, floor)) continue
+            for (const item of matching) { item.interaction = message.interaction; item.interactionRevision = message.interactionRevision }
             if (current?.eventId === message.eventId) {
               current.interaction = message.interaction
               win.webContents.send('reminder', { type: 'interaction-update', id: current.id, interaction: message.interaction })
@@ -105,6 +110,7 @@ app.whenReady().then(async () => {
             continue
           }
           if (!validateDelivery(message)) { send({ type: 'failed', id: message?.id, reason: 'invalid-message' }); continue }
+          message = interactionState.decorate(message)
           if (revoked.has(message.eventId)) { send({ type: 'failed', id: message.id, reason: 'stale-event' }); continue }
           if (seen.has(message.id)) { send({ type: 'duplicate', id: message.id }); continue }
           seen.add(message.id)

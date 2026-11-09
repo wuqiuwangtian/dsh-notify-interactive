@@ -130,3 +130,14 @@ GitHub 运行时下载首次返回 504；改用 `ELECTRON_MIRROR=https://npmmirr
 新注册/命令/执行许可/结果路由均复用 connection owner 认证；辅助程序只通过原有随机 mailbox 回传显式动作。Web 调用前检查同一 Pending 对象、原始 key、session、事件、实例、完整问题内容和当前可答通道；命令只交付一次，授权执行后的丢失确认不自动重试。Web 连接 TTL 为 8 秒，命令等待 10 秒；窗口自身不运行 DSH API，不构造 session 用户消息。
 
 桌面获得焦点、编辑或点击“慢慢回答”才分别委派 holdFocus/engage/takeTime；失焦/关闭使用 releaseFocus，不调用取消或拒绝。焦点命令有序号，旧 focus 不能覆盖新 blur；Web 运行期间丢失桌面焦点心跳约 8 秒后释放该桥接获得的 focus。临时断线/通道切换保留窗口输入，辅助程序重启不持久保存答案草稿。实际验证与未验收项见 verification 第 12 节。
+
+## 11. 原生实例验证纠正的契约差异
+
+独立 DSH 0.2.2-rc.1 原生服务/前端/Pending 与 Windows renderer 验证发现，上一版 mock 覆盖不足：
+
+- `dsh-tool-ask-user` 的默认 legacy 实现不向 `userQuestions.ask` 传 `wait.callId`，故 PendingQuestion.callId 缺失。对这类阻塞提问，宿主保存 tool/call.arguments 中完整批次，标准化 `multi_select`/`multiSelect` 后和 Pending 全部题目/选项/说明逐项匹配；同一会话重复出现完全相同的未命名批次时拒绝推断关联。不能只取第一题或使用页面本地 key。
+- `dsh-plan-mode` 的 exit_plan_mode 将 exec.callId 放入唯一问题的 intent.callId，而不是 request.wait；原生 Pending.callId 同样缺失。只对该唯一 plan-review 问题使用 intent.callId。
+- `dsh-session` 的原生 tool/result 将 ToolResultMessage 包在 data.message，关联字段为 message.toolCallId（source.callId 也可读），content 为 text 块数组。应先提取文本再识别 pending:true。user/message 则直接携带 UserMessage，user-question-reply 的 source 在 data.source。独立实例已验证原始 Web 回答 continued 后撤回旧桌面卡。
+- 已认证的真实前端接收 dsh-notify-session 参数后，实际 mainView 切到目标且清理参数；Windows shell.openExternal 到用户默认浏览器并保留已有认证这一段仍需日常环境验收。
+
+另复现 Windows→WSL localhost 不通：WSL 的 127.0.0.1:3080 返回 401，Windows 直接 TCP 超时；Windows→WSL eth0 地址的独立服务返回 401，证明监听与认证可达。未修改 .wslconfig、未关闭 WSL、未重启用户服务；给出绑定当前 WSL 地址并使用新打印完整认证 URL 的替代命令。地址不可写成项目常量。

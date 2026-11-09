@@ -19,7 +19,8 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms))
 const statuses = new Map()
 function check(condition, reason) { if (!condition) throw Error(reason) }
 async function until(predicate) {
-  for (let i = 0; i < 100; i++) { if (await predicate()) return; await pause(100) }
+  const deadline = Date.now() + 15000
+  while (Date.now() < deadline) { if (await predicate()) return; await pause(100) }
   throw Error('smoke-timeout')
 }
 async function request(path, body, method = 'POST') {
@@ -120,8 +121,8 @@ try {
   await until(() => answers.length === 2)
   check(JSON.stringify(answers[1]) === JSON.stringify({ answers: [{ id: 'one', selected: ['Windows'] }, { id: 'two', selected: ['弹窗', '音效'], custom: '保留自定义说明' }, { id: 'three', selected: [] }] }), 'question-batch-mismatch')
   emit('tool/call', { callId: 'plan-call', name: 'exit_plan_mode' })
-  statuses.set('synthetic', { pendingInteraction: { kind: 'plan-review', key: 'plan-local', callId: 'plan-call', snapshot: () => ({ channel: 'waterfall' }), engage: () => {},
-    questions: [{ id: 'plan', question: '是否按此计划继续？', detail: '1. 核对当前请求\n2. 由用户明确提交\n3. 验证结果', intent: { kind: 'plan-review', approve: '按计划继续' }, options: [{ label: '按计划继续' }, { label: '需要修改' }] }],
+  statuses.set('synthetic', { pendingInteraction: { kind: 'plan-review', key: 'plan-local', snapshot: () => ({ channel: 'waterfall' }), engage: () => {},
+    questions: [{ id: 'plan', question: '是否按此计划继续？', detail: '1. 核对当前请求\n2. 由用户明确提交\n3. 验证结果', intent: { kind: 'plan-review', approve: '按计划继续', callId: 'plan-call' }, options: [{ label: '按计划继续' }, { label: '需要修改' }] }],
     answer: async answer => { answers.push(answer); emit('tool/result', { callId: 'plan-call', message: { content: '{}' } }); statuses.clear() } } })
   await show('plan-review', 'plan-call')
   await screenshot('plan')

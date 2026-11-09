@@ -1,14 +1,25 @@
 import { randomUUID } from 'node:crypto'
-import { validPresentation, validAnswer, presentationKey } from '../interaction/schema.js'
+import { validPresentation, validAnswer, presentationKey, questionsKey } from '../interaction/schema.js'
 
 /** A command is handed to one live page once. Lost acknowledgements never replay answers. */
 export function createInteractionBroker({ coordinator, now = Date.now, ttl = 8000, commandMs = 10000, onUpdate = () => {} }) {
   const instanceId = randomUUID()
   const owners = new Map(), commands = new Map(), locked = new Map()
   const approvalCalls = new Map()
+  const unnamedQuestions = new Map()
   let approvalOverflow = false
+  let questionOverflow = false
   const focusSequences = new Map()
   function observe(fact) {
+    if (fact?.kind === 'question' && fact.questionKey) {
+      const key = JSON.stringify([fact.sessionId, fact.questionKey])
+      if (!unnamedQuestions.has(key) && unnamedQuestions.size >= 1024) questionOverflow = true
+      else {
+        const ids = unnamedQuestions.get(key) ?? new Set()
+        if (ids.size < 2) ids.add(fact.id)
+        unnamedQuestions.set(key, ids)
+      }
+    }
     if (fact?.kind !== 'approval' || !fact.callId) return
     const key = JSON.stringify([fact.sessionId, fact.callId])
     if (!approvalCalls.has(key) && approvalCalls.size >= 1024) { approvalOverflow = true; return }
@@ -17,8 +28,17 @@ export function createInteractionBroker({ coordinator, now = Date.now, ttl = 800
     approvalCalls.set(key, ids)
     // Fail closed rather than forget an ambiguous call and re-enable approval.
   }
+  function resolveView(sessionId, view) {
+    const fact = coordinator.resolve(sessionId, view.kind, view.callId)
+    if (!fact) return undefined
+    if (view.callId) return String(fact.callId) === view.callId ? fact : undefined
+    const key = questionsKey(view.questions)
+    if (view.kind !== 'question' || questionOverflow || !fact.questionKey || fact.questionKey !== key ||
+      unnamedQuestions.get(JSON.stringify([fact.sessionId, key]))?.size !== 1) return undefined
+    return fact
+  }
   function current(owner) {
-    const fact = coordinator.resolve(owner.sessionId, owner.view.kind, owner.view.callId)
+    const fact = resolveView(owner.sessionId, owner.view)
     if (!fact || fact.id !== owner.eventId || now() - owner.at > ttl) return false
     if (owner.view.kind === 'approval' && (approvalOverflow || approvalCalls.get(JSON.stringify([fact.sessionId, fact.callId]))?.size !== 1)) return false
     if (owner.view.kind === 'approval' && (owner.view.toolName !== fact.approval?.toolName || owner.view.reason !== fact.approval?.reason)) return false
@@ -45,7 +65,7 @@ export function createInteractionBroker({ coordinator, now = Date.now, ttl = 800
     const retained = new Set(), bindings = []
     for (const item of registrations) {
       if (typeof item.token !== 'string' || item.token.length > 160 || typeof item.sessionId !== 'string' || !validPresentation(item.view)) continue
-      const fact = coordinator.resolve(item.sessionId, item.view.kind, item.view.callId)
+      const fact = resolveView(item.sessionId, item.view)
       if (!fact) continue
       const key = JSON.stringify([clientId, item.token])
       const old = owners.get(key)
@@ -116,5 +136,5 @@ export function createInteractionBroker({ coordinator, now = Date.now, ttl = 800
       for (const [key, owner] of owners) if (!current(owner)) { owners.delete(key); onUpdate(owner.eventId, presentation(owner.eventId)) }
       for (const [eventId, lock] of locked) if (coordinator.resolve(lock.sessionId, lock.kind)?.id !== eventId) locked.delete(eventId)
     },
-    dispose() { for (const c of commands.values()) if (c.resolve) complete(c, c.status === 'executing' ? 'uncertain' : 'unavailable'); owners.clear(); commands.clear(); locked.clear(); approvalCalls.clear() } }
+    dispose() { for (const c of commands.values()) if (c.resolve) complete(c, c.status === 'executing' ? 'uncertain' : 'unavailable'); owners.clear(); commands.clear(); locked.clear(); approvalCalls.clear(); unnamedQuestions.clear() } }
 }

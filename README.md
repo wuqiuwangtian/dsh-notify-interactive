@@ -43,7 +43,7 @@ dsh --profile web --no-open
 - 权威文件：当前 profile 的 notify-interactive.settings.json（schema v3 + revision）；localStorage 键 dsh.notify-interactive.settings.v2 仅作缓存和迁移源。
 - 断线编辑需等待同步；配置损坏不会静默覆盖，应先备份再检查。
 - Windows 辅助程序缺失时退回现有 PowerShell 提醒/系统音，原生进程启动不等同窗口已显示，也不承诺匹配所选合成音效。
-- 无 callId、同一 callId 重复审批或元数据不匹配时不建立应答目标；必须回 DSH。Web 断线保留桌面草稿，重新关联后才能提交；重启辅助程序不会恢复草稿。
+- 审批缺 callId、同 callId 重复审批或元数据不匹配时仅提醒。阻塞式提问没有 Pending.callId 时，需完整批次唯一匹配宿主工具事件；计划审核从 intent.callId 关联。歧义请求回 DSH。Web 断线保留桌面草稿，辅助程序重启不恢复草稿。
 - 真实用户会话、多标签、重启后配置和精准回会话仍待手工验收；自动测试和合成事件通过不等于真实环境全部通过。
 
 ## 开发与验证
@@ -58,5 +58,11 @@ pnpm interaction:smoke
 桌面冒烟会显示真实模拟窗口，前两项桌面测试可能播放音效，结束清理测试进程。交互冒烟仅操作独立测试进程及模拟 Pending，临时为该进程开启 loopback DevTools 以验证真实 renderer 按钮；正式路径无此端口。真实用户会话仍需手工验收，详细证据见验证文档。
 
 src/client 为状态/presence 与设置同步；src/host 为协调/持久化/认证和投递；companion 为窗口/队列；src/ui 为设置与旧 Web 卡片；src/audio 为合成声音。lib 由构建同步，不能手改。窗口文件变更后可运行 node scripts/stage-companion.mjs，同步内容变化会重新加载通知辅助程序。
+
+独立原生验收（需本机已安装 DSH 0.2.2-rc.1）：`pnpm native:acceptance`。脚本创建临时 profile/登录凭据和本地确定性适配器，走真实 DSH 审批、内置提问/计划工具与 Pending；不读取现有模型凭据，不发外部模型请求。可加 `--timed` 验证一秒后 continued/rpc，Ctrl+C 清理；操作步骤及已取得证据见[验收第 13 节](docs/verification.md#13-p3-原生-dsh-独立实例验收与接口修复)。
+
+## Windows 无法连接 WSL Web
+
+若 WSL 内有 HTTP 响应，而 Windows 访问 localhost 拒绝连接，先排查 WSL localhost 转发；终端无报错不能证明 Windows 已能访问。可在 Web 空闲时改用 `dsh web --host <WSL-IPv4> --port 3080 --no-open`，打开新打印的完整认证链接。用 `ip -4 -o addr show dev eth0` 查看当前地址；地址可能随 WSL 重启变化。不要只改旧认证链接的主机名，也不必为此关闭整个 WSL。此方式监听 WSL 网卡，适用于可信的本地网络。
 
 [MIT](LICENSE) © 2026 wuqiuwangtian

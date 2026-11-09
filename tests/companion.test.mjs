@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { createCompanion } from '../src/host/companion.js'
-import { validateDelivery } from '../companion/protocol.cjs'
+import { validateDelivery, createInteractionState } from '../companion/protocol.cjs'
 
 function fixture(options = {}) {
   const root = mkdtempSync(join(tmpdir(), 'dsh-notify-test-'))
@@ -101,6 +101,19 @@ test('desktop protocol rejects active content, privileged URLs and invalid audio
 })
 
 const { getCompanionStatus } = await import('../src/host/companion.js')
+test('out-of-order mailbox interaction updates cannot revive disconnected controls, even before delivery', () => {
+  const state = createInteractionState()
+  const live = { kind: 'question' }
+  assert.equal(state.update({ eventId: 'q', interactionRevision: 2, interaction: null }), true)
+  assert.equal(state.update({ eventId: 'q', interactionRevision: 1, interaction: live }), false)
+  assert.equal(state.decorate({ eventId: 'q', interactionRevision: 1, interaction: live }).interaction, null)
+  assert.equal(state.decorate({ eventId: 'q', interactionRevision: 3, interaction: live }).interaction, live)
+  assert.equal(state.update({ eventId: 'q', interactionRevision: 2, interaction: null }), false)
+  const bounded = createInteractionState(1)
+  bounded.update({ eventId: 'q', interactionRevision: 5, interaction: live })
+  bounded.update({ eventId: 'other', interactionRevision: 6, interaction: live })
+  assert.equal(bounded.update({ eventId: 'q', interactionRevision: 4, interaction: null }, 5), false, 'active/queued versions survive history eviction')
+})
 test('an installed companion is automatic without a startup flag; explicit disable wins', () => {
   const installed = () => ({ executable: 'installed' })
   assert.deepEqual(getCompanionStatus({}, installed), { mode: 'automatic', available: true, enabled: true, scope: 'reminders' })

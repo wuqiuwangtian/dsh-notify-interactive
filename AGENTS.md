@@ -30,10 +30,12 @@ P2 已提供统一投递与 profile 设置；P3 开发代码增加 Windows 桌�
 - `src/state/`：设置、通知队列、弹窗控制器、surface 标志。
 - `src/audio/`：Web Audio 合成 + WAV 兜底。
 - `companion/`：Electron 提醒窗口/交互表单/队列；由 `src/host/companion.js` 使用连接隔离文件邮箱管理，正式路径不开放额外端口。
-- `src/host/interactions.js` + `src/client/interactions.js` + `src/interaction/schema.js`：将显式桌面动作交给唯一在线 Web Pending 所有者；只交付一次，复核实例/会话/请求/对象/key/状态，未确认的提交禁止自动重放。审批缺 callId、同 callId 重复或元数据不匹配时只提醒。
+- 文件邮箱不是 FIFO；交互状态按 interactionRevision 比较，早到的更新必须保留到对应 deliver。不要以 readdir 顺序推断新旧，也不要让旧更新覆盖断线/禁用状态。
+- `src/host/interactions.js` + `src/client/interactions.js` + `src/interaction/schema.js`：将显式动作交给唯一在线 Web Pending 所有者；只交付一次，复核实例/会话/请求/对象/key/状态。审批缺 callId、重复或元数据不匹配时只提醒；阻塞式提问可按完整批次唯一匹配，计划从 intent.callId 关联；歧义请求只提醒。
 - `src/client/preferences.js` 与 `src/host/preferences.js`：schema v3 的 localStorage 首次迁移与 profile 原子持久化，revision 冲突只重放局部修改。
 - `pnpm coordination:smoke`：真实 Windows 通道组合/去重/排队/宿主接管，mock 的仅是 DSH 上下文与 owner admission，不等同真实登录会话。
 - `pnpm interaction:smoke`：真实 Windows renderer 按钮 + 构建后 Host + 模拟 Web Pending；只为该独立测试进程临时开启 loopback DevTools，结束清理。截图位于 /tmp；不能把模拟应答说成真实用户请求通过。
+- `pnpm native:acceptance`：创建临时 DSH home/profile、独立凭据和本地确定性适配器，触发原生审批及内置提问/计划工具；不读取用户凭据、不请求外部模型、不新增模型工具或 waterfall 监听、不 append 日志。Ctrl+C 清理，默认关闭声音；`--timed` 验证 continued，只有显式 `--desktop-debug-port` 才为测试组件开 loopback DevTools。真实原生验收与用户日常实例仍须区分，见 verification 第 13 节。
 - `pnpm companion:install` 在 WSL 下载并复制 Windows 运行时至 LocalAppData（需要 Node >=22.12）；不要提交二进制或 `.runtime.json`。改窗口文件后需重新 staging，详见 verification。
 
 ## 构建与验证
@@ -69,6 +71,7 @@ pnpm verify      # build + node --check + node --test + render smoke
 - `PendingQuestion.answer({ answers: [{ id, selected, custom? }] })`；`channel` 为 `waterfall` / `rpc` / `none`；`snapshot().countdown`；`holdFocus`/`releaseFocus`/`engage`/`takeTime`。
 - `ctx.uiWorkspace.openSession(sessionId)`。
 - 宿主 `session/event`：`approval/asked`、`tool/call`（`ask_user_question` / `exit_plan_mode`）、`turn/end`；`session.header.cwd/origin`。
+- 原生 `tool/result` 的关联在 `data.message.toolCallId`，`message.content` 为文本块数组；不能只按模拟的 `data.callId`/字符串解析。`user/message` 的 `source` 则直接在 `data.source`。legacy 阻塞提问没有 Pending.callId，计划的工具 ID 在唯一问题的 intent.callId。
 - 宿主 `ctx.webServer.register({ kind: 'exact', path, handler })`。
 - `react-dom/client` 在 `dsh-web-frontend` 的 static modules 中可用。
 - Document PiP：`window.documentPictureInPicture.requestWindow({ width, height })`，需要用户手势；不支持时 `window.open`。

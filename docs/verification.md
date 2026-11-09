@@ -1,6 +1,6 @@
 # 验证证据与目标验收
 
-更新：2026-11-09。当前阶段验收以第 12 节为准，通道/配置沿用第 11 节；前文为阶段历史证据。需求与阶段状态见 [requirements.md](requirements.md)，原因分析见 [research.md](research.md)。
+更新：2026-11-09。当前阶段验收以第 13 节为准，通道/配置沿用第 11 节；前文为阶段历史证据。需求与阶段状态见 [requirements.md](requirements.md)，原因分析见 [research.md](research.md)。
 
 ## 1. 上轮文档审阅验证（保留记录）
 
@@ -237,3 +237,44 @@ dsh --profile web --no-open
 6. 设置页的审批/提问演示仍用于旧浏览器交互卡/桌面只读提醒，不证明上述真实请求链路；可复现独立链路使用 `pnpm interaction:smoke`。同时按第 11 节回归静默、独立通道和配置同步。
 
 下一项仍是 requirements 第 5 节的 P3 真实端到端验收，满足审批/完整提问/计划、过期并发、输入法与精准回会话条件后，再进入 P4/P5；不把模拟 Pending 通过写成用户已验收。
+
+## 13. P3 原生 DSH 独立实例验收与接口修复
+
+### 本轮改动
+
+新增 `scripts/native-acceptance.mjs` 和 `scripts/fixtures/native-adapter.mjs`，可复用本轮的隔离验收方式。修改 shared schema、host coordinator/broker、对应回归与构建产物；计划冒烟改用原生形状的 intent.callId。桌面交互更新增加版本及早到状态缓存，修复文件邮箱乱序导致断线后旧状态覆盖新状态的问题。同步现有文档；无文件删除、无用户功能移除。
+
+修复三个原生契约差异：legacy 阻塞提问无 Pending.callId，改按完整题目批次唯一匹配；计划按唯一问题的 intent.callId；原生 tool/result 用 message.toolCallId 和文本块数组，避免 continued 问题过早失效及结束后不撤回。审批无 callId 仍只读，重复的完全相同未命名批次也只读，禁止凭猜测关联。
+
+### 实际证据
+
+- `pnpm verify`：104 项测试、构建、语法与渲染通过；新增无 ID 完整批次匹配/重复拒绝、第二题不匹配拒绝、原生计划 intent 关联、真实 tool/result 形状及交互状态乱序回归。
+- 全新临时 DSH home/profile/登录凭据，真实安装包 0.2.2-rc.1、真实宿主路由、真实远端事件、真实 Web 前端及 Pending，真实 Windows renderer 按钮；仅外部 LLM 由本地确定性适配器替换。没有修改用户 profile、读取现有凭据、发外部模型请求、注册新模型工具、监听新的 waterfall 或直接 append session 事件。测试消息通过隔离会话的原生入口提交，日志由 DSH 原生流程产生。
+- 审批：本地适配器在真实 open turn 中请求无命令副作用的原生审批；桌面点击允许一次，原生 approval/decided 记录 allowed-once，等待结束、任务完成。原 Web 拒绝路径也观察到 rejected。
+- 阻塞式提问：真实 ask_user_question 产生三题、Pending.callId 缺失；桌面选择单选、多选、中文自定义和明确跳过，原生工具结果与完整预期批次完全一致，未截断题目。
+- 计划：真实 `/plan on` + exit_plan_mode 生成原生 plan-review，Pending.callId 缺失、intent.callId 存在；桌面批准，工具结果报告 Plan approved，原生 plan/mode.active=false。
+- continued：独立 profile 使用一秒 timed 模式，原生 snapshot 变为 state=continued/channel=rpc；桌面提交后原生日志仅有一条 user-question-reply，未重复作答。再次生成新请求，从原 Web Pending 显式回答，旧桌面问题撤回并显示排队的完成提醒。
+- 返回：已认证的真实 Web 前端访问带目标参数的 URL，mainView 确认等于事件所属会话；参数清理后仍保持该会话。此项证明 URL 消费与会话定位，不等同 Windows 默认浏览器的认证交接已验收。
+- 可复用脚本的 --timed 启动已验证，临时 profile 与本地适配器加载成功，Ctrl+C/终止后清理。自动按钮 actor 仅连接独立测试辅助程序的 loopback DevTools；生产辅助程序不增加调试端口。
+- 末轮 `pnpm interaction:smoke` 曾在断线草稿检查失败，定位为无序 readdir 使旧 live 更新覆盖 null；增加 interactionRevision，并在主进程缓存早到状态、按版本应用到 deliver/当前/队列。修复后 Windows 交互冒烟全部通过，包含断线恢复及计划 intent 关联；等待条件改用实际 15 秒截止时间，避免高成本 CDP 轮询拉长到数分钟。
+
+### 复现原生验收
+
+```sh
+pnpm native:acceptance --host <本机可达的地址>
+# 另一轮测试 continued/rpc：
+pnpm native:acceptance --host <本机可达的地址> --timed
+```
+
+1. 只打开脚本新打印的完整登录链接，添加它打印的临时 workspace。选择 Local notification acceptance (no network) 下的 approval/question/plan/completion 模型；这些是测试路由，不发外部请求，声音默认关闭。
+2. approval 只请求 notification-test-only 批准，不执行命令或访问文件；question 调用原生内置工具。使用一个目标会话和另一个前台会话，核对目标的提醒及作答。可以通过目标会话的公开 SessionFace.prompt 发隔离测试消息；不能向日常会话投测试输入。
+3. plan 路由在 `/plan on` 后调用原生 exit_plan_mode，检查计划正文、答案、模式退出。--timed 下等待一秒后再回答，确认走原生 continued/rpc。
+4. 若需要自动检查独立 Windows renderer，可显式加 --desktop-debug-port <空闲端口>；该 loopback 调试口只属于这一测试组件。默认不开。Ctrl+C 仅结束测试实例并清理临时 home，勿把临时登录链接保存到项目。
+
+### 用户 Web 拒绝连接的同期诊断
+
+用户确认使用启动终端打印的带 :3080 完整链接。实查用户进程已监听 WSL 127.0.0.1:3080，WSL 匿名请求返回 401；Windows 对 127.0.0.1、localhost、::1 连接失败，直接 TCP 也超时。独立实例改监听当前 eth0 地址后，Windows 返回 401，证明直接 IP 可达（401 是没有登录 cookie，不是拒绝连接）。因此给出空闲时改用 `dsh web --host <WSL-IPv4> --port 3080 --no-open` 并打开新打印完整链接的替代方式。没有关闭 WSL、修改全局网络配置或中断用户新启动的 Web；用户日常实例恢复访问尚未收到确认。
+
+### 剩余验收与接续
+
+下一项按 requirements 第 5 节：日常实例中确认上述能力与 Windows 默认浏览器交接，实际中文输入法候选确认、桌面真实焦点/倒计时、多屏/缩放及旧浏览器作答窗并存策略仍未验收。自动合成 isComposing 事件不等于真实 IME。Linux 原生桌面、TUI、DSH Desktop 未扩大；暂不进入 P4/P5。

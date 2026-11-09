@@ -99,3 +99,18 @@ test('a request invalidated during companion startup is not presented or sent to
   assert.equal(result.delivery, 'suppressed')
   assert.equal(fallback, false)
 })
+
+test('native tool/result uses message.toolCallId and text blocks, preserving continued questions until replied', () => {
+  const c = createCoordinator()
+  const session = { id: 'native' }
+  const request = { type: 'tool/call', data: { callId: 'native-call', name: 'ask_user_question', arguments: '{}' } }
+  const fact = c.observe(session, request, { kind: 'question' })
+  c.observe(session, { type: 'tool/result', data: { message: { role: 'tool', toolCallId: 'native-call', content: [{ type: 'text', text: JSON.stringify({ pending: true, callId: 'native-call' }) }] } } }, null)
+  assert.equal(c.resolve(session.id, 'question')?.id, fact.id)
+  c.observe(session, { type: 'user/message', data: { source: { kind: 'user-question-reply', callId: 'native-call' } } }, null)
+  assert.equal(c.resolve(session.id, 'question'), undefined)
+  const next = c.observe(session, { ...request, data: { ...request.data, callId: 'native-call-2' } }, { kind: 'question' })
+  assert.ok(next)
+  c.observe(session, { type: 'tool/result', data: { message: { role: 'tool', toolCallId: 'native-call-2', content: [{ type: 'text', text: '{"answers":[]}' }] } } }, null)
+  assert.equal(c.resolve(session.id, 'question'), undefined)
+})

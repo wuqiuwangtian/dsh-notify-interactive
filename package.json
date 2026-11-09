@@ -77,7 +77,8 @@
     "companion:install": "node scripts/install-companion.mjs",
     "companion:smoke": "pnpm build && node scripts/companion-smoke.mjs",
     "coordination:smoke": "pnpm build && node scripts/coordination-smoke.mjs",
-    "interaction:smoke": "pnpm build && node scripts/interaction-smoke.mjs"
+    "interaction:smoke": "pnpm build && node scripts/interaction-smoke.mjs",
+    "native:acceptance": "pnpm build && node scripts/native-acceptance.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.25.0",

@@ -218,3 +218,46 @@ test('mismatched approval metadata cannot create a desktop answer target', async
     assert.equal(h.broker.presentation(fact.id), null)
   } finally { h.broker.dispose() }
 })
+
+test('blocking questions without Pending.callId bind only to one matching complete host batch', async () => {
+  const h = harness()
+  try {
+    const q = h.question(); q.callId = undefined
+    const args = { questions: q.questions.map(item => ({ ...item, multi_select: item.multiSelect, multiSelect: undefined })) }
+    const fact = h.event('tool/call', { callId: 'host-blocking-call', name: 'ask_user_question', arguments: JSON.stringify(args) })
+    const p = h.page(q); await p.bridge.sync()
+    assert.equal(h.broker.presentation(fact.id)?.callId, '')
+    const answer = { answers: [{ id: 'a', selected: ['A'] }, { id: 'b', selected: ['X'], custom: 'extra' }] }
+    const submitted = h.broker.submit(h.packet(fact, { answer })); await p.bridge.sync()
+    assert.equal((await submitted).status, 'success'); assert.deepEqual(h.calls, [answer])
+    h.event('tool/result', { callId: 'host-blocking-call', message: { content: '{}' } })
+    const second = h.event('tool/call', { callId: 'different-call-same-batch', name: 'ask_user_question', arguments: JSON.stringify(args) })
+    await p.bridge.sync()
+    assert.equal(h.broker.presentation(second.id), null, 'identical unnamed requests cannot borrow a stale Pending object')
+  } finally { h.broker.dispose() }
+})
+
+test('unnamed questions cannot bind by first question alone or by mismatched options', async () => {
+  const h = harness()
+  try {
+    const q = h.question(); q.callId = undefined
+    const fact = h.event('tool/call', { callId: 'host-question', name: 'ask_user_question', arguments: JSON.stringify({ questions: q.questions }) })
+    q.questions[1] = { ...q.questions[1], question: 'Different second question' }
+    const p = h.page(q); await p.bridge.sync()
+    assert.equal(h.broker.presentation(fact.id), null)
+  } finally { h.broker.dispose() }
+})
+
+test('native plan-review Pending without callId derives its correlation from the one review intent', async () => {
+  const h = harness()
+  try {
+    const fact = h.event('tool/call', { callId: 'plan-call', name: 'exit_plan_mode' })
+    const q = h.question('plan-review'); q.callId = undefined
+    q.questions = [{ id: 'plan', question: 'Approve?', detail: '# The actual plan', options: [{ label: 'Proceed' }, { label: 'Revise' }], intent: { kind: 'plan-review', approve: 'Proceed', callId: 'plan-call' } }]
+    const p = h.page(q); await p.bridge.sync()
+    assert.equal(h.broker.presentation(fact.id)?.callId, 'plan-call')
+    const answer = { answers: [{ id: 'plan', selected: ['Proceed'] }] }
+    const result = h.broker.submit(h.packet(fact, { answer })); await p.bridge.sync()
+    assert.equal((await result).status, 'success'); assert.deepEqual(h.calls, [answer])
+  } finally { h.broker.dispose() }
+})

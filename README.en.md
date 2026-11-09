@@ -10,7 +10,7 @@ P3 answer-bridge development code targeting DSH 0.2.2-rc.1. Package version rema
 
 Approvals, questions, plan reviews and completion share host delivery claims. Linked requests support Allow once/Reject, full question batches, single/multiple choices, custom text and explicit skipping. Plan reviews retain the original options and full plan. Popups and sound have independent global/per-event controls and presets. Preferences migrate to the current profile with revision-based merging; offline edits remain queued.
 
-**Desktop answering requires an authenticated, connected Web page owning the live Pending object.** Missing call IDs, repeated approvals on the same call ID or mismatched metadata remain reminder-only. Lost acknowledgements never replay answers; uncertain results require checking DSH. Drafts survive a temporary Web disconnect, but not a companion restart. TUI, DSH Desktop and native Linux acceptance are outside this iteration.
+**Desktop answering requires an authenticated, connected Web page owning the live Pending object.** Approvals with missing IDs, repeated call IDs or mismatched metadata remain reminder-only. Unnamed blocking questions require a unique match of the complete host question batch; plan reviews use intent.callId. Lost acknowledgements never replay answers. Drafts survive a temporary Web disconnect, but not a companion restart. TUI, DSH Desktop and native Linux acceptance are outside this iteration.
 
 The host only observes committed session/event messages. No automatic answers, session-log writes, prompt injection, model-tool registration or approval-waterfall interception. Plugin routes use DSH authentication, authority checks and owner admission.
 
@@ -48,5 +48,9 @@ Desktop smoke commands show real synthetic windows and may play audio. Interacti
 Without the companion, the Windows fallback uses the existing PowerShell dialog/system sound; process startup does not prove visibility or matching synthesized sound presets. Native Linux remains unverified.
 
 Build and commit lib with source changes. Window updates can be staged with node scripts/stage-companion.mjs; content revisions reload the notification companion.
+
+`pnpm native:acceptance` starts an isolated temporary DSH profile with a deterministic local adapter, real native approvals and built-in question/plan tools. It does not read existing credentials or make external model requests. Add `--timed` for continued/rpc questions; Ctrl+C cleans up. Requires installed DSH 0.2.2-rc.1. See verification section 13 for evidence and remaining manual checks.
+
+If Windows cannot reach WSL localhost while WSL itself responds, check localhost forwarding. When idle, an alternative is `dsh web --host <WSL-IPv4> --port 3080 --no-open`, using its newly printed complete authentication URL. Find the address with `ip -4 -o addr show dev eth0`; it may change after a WSL restart. This binds the WSL interface and is intended for a trusted local network.
 
 [MIT](LICENSE) © 2026 wuqiuwangtian
