@@ -12,6 +12,7 @@ export const runtime = {
   ready: false,
   ctx: undefined,
   settingsStore: undefined,
+  preferencesSync: { getSnapshot: () => 'connecting', subscribe: () => () => {} },
   notificationStore: undefined,
   popupController: undefined,
   engine: undefined,

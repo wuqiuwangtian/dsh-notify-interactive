@@ -1,7 +1,8 @@
-import { cp, mkdir, writeFile, readFile } from 'node:fs/promises'
+import { cp, mkdir, writeFile, readFile, readdir, stat, rename } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { createHash, randomUUID } from 'node:crypto'
 import { join, win32 } from 'node:path'
 
 const directory = fileURLToPath(new URL('../companion', import.meta.url))
@@ -18,9 +19,31 @@ if (process.platform !== 'win32' && existsSync(powershell)) {
   // Reuse identical files: Windows locks loaded DLLs while the companion runs.
   // New versions get their own directory rather than replacing an active runtime.
   await cp(sourceRuntime, join(target, runtimeName), { recursive: true, force: false })
+  const previousRevision = await readFile(join(target, '.ui-revision'), 'utf8').catch(() => '')
+  const hash = createHash('sha256')
   for (const name of ['main.cjs', 'preload.cjs', 'protocol.cjs', 'index.html', 'renderer.js', 'style.css', 'package.json']) {
+    const contents = await readFile(join(directory, name))
+    hash.update(contents)
     await cp(join(directory, name), join(target, name))
   }
-  await writeFile(join(directory, '.runtime.json'), JSON.stringify({ executable: join(target, runtimeName, 'electron.exe'), application: windowsDirectory }))
+  const runtimeRecord = join(directory, `.runtime-${randomUUID()}.tmp`)
+  await writeFile(runtimeRecord, JSON.stringify({ executable: join(target, runtimeName, 'electron.exe'), application: windowsDirectory }))
+  await rename(runtimeRecord, join(directory, '.runtime.json'))
+  const revision = hash.digest('hex')
+  await writeFile(join(target, '.ui-revision'), revision)
+  if (previousRevision !== revision) {
+    const root = join(target, 'bridge')
+    for (const connection of await readdir(root).catch(() => [])) {
+      if (!/^[a-f0-9-]{36}$/.test(connection)) continue
+      const mailbox = join(root, connection)
+      const lease = await stat(join(mailbox, 'lease')).catch(() => null)
+      if (!lease || Date.now() - lease.mtimeMs > 20000) continue
+      const temporary = join(mailbox, `command-${randomUUID()}.tmp`)
+      try {
+        await writeFile(temporary, JSON.stringify({ type: 'shutdown' }))
+        await rename(temporary, temporary.replace(/\.tmp$/, '.json'))
+      } catch (error) { if (error.code !== 'ENOENT') throw error }
+    }
+  }
   console.log('Staged Windows companion in LocalAppData/DSHNotifyInteractive/companion')
 }

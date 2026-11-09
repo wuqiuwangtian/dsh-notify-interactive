@@ -1,10 +1,4 @@
-/**
- * Persistent notification preferences.
- *
- * The plugin never writes the profile's cordis patch: settings live in the
- * browser (localStorage) because the web surface is browser-owned. A corrupt
- * or unavailable store falls back to defaults instead of failing the plugin.
- */
+/** Normalized preferences shared with the Host profile; localStorage is a browser cache/migration source. */
 
 export const SETTINGS_KEY = 'dsh.notify-interactive.settings.v2'
 export const SOUND_PRESET_IDS = Object.freeze(['chime', 'pulse', 'complete', 'soft', 'alert', 'none'])
@@ -15,15 +9,15 @@ const DEFAULT_PRESET = 'chime'
 /** Full default settings. Callers receive a fresh object. */
 export function createDefaultSettings() {
   return {
-    version: 2,
+    version: 3,
     enabled: true,
+    popup: { enabled: true },
     sound: {
       enabled: true,
       preset: DEFAULT_PRESET,
       volume: 0.7,
     },
-    // Phase 1 keeps every scenario on. The data model is ready for the
-    // per-scenario settings UI in phase 2.
+    // Each event controls its own channels and optional sound override.
     scenarios: {
       approval: scenarioDefaults(),
       question: scenarioDefaults(),
@@ -34,7 +28,7 @@ export function createDefaultSettings() {
 }
 
 function scenarioDefaults() {
-  return { sound: true, notify: true }
+  return { sound: true, notify: true, preset: 'inherit' }
 }
 
 function isObject(value) {
@@ -59,6 +53,7 @@ function scenarioOf(raw) {
   return {
     sound: bool(value.sound, true),
     notify: bool(value.notify, true),
+    preset: value.preset === undefined || value.preset === 'inherit' ? 'inherit' : presetOf(value.preset),
   }
 }
 
@@ -75,8 +70,9 @@ export function normalizeSettings(raw) {
   const scenarios = isObject(value.scenarios) ? value.scenarios : {}
 
   return {
-    version: 2,
+    version: 3,
     enabled: bool(value.enabled, true),
+    popup: { enabled: bool(value.popup?.enabled, true) },
     sound: {
       enabled: bool(sound.enabled, true),
       preset: presetOf(sound.preset),
@@ -106,6 +102,7 @@ export function mergeSettings(current, patch) {
   return normalizeSettings({
     ...base,
     ...next,
+    popup: { ...base.popup, ...(isObject(next.popup) ? next.popup : {}) },
     sound: { ...base.sound, ...(isObject(next.sound) ? next.sound : {}) },
     scenarios,
   })

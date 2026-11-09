@@ -76,6 +76,6 @@ export function gateChannels({
   return {
     attended,
     sound: enabled && settings?.sound?.enabled !== false && scenario.sound !== false,
-    notify: enabled && scenario.notify !== false,
+    notify: enabled && settings?.popup?.enabled !== false && scenario.notify !== false,
   }
 }

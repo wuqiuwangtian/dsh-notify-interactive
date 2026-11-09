@@ -1,20 +1,17 @@
-/**
- * Host half.
- *
- * It observes committed session events and, when no web client is present,
- * shows a Windows popup reminder through PowerShell. It never answers an
- * approval or question: the fallback is reminder-only.
- *
- * The web client reports presence and asks this half for the same fallback
- * when its interactive popup cannot be opened.
+/** Host coordinator: profile preferences, authenticated Web requests, event claims and desktop delivery.
+ * It only observes session/event; no answer waterfall is registered or intercepted.
  */
 
+import { join } from 'node:path'
+import { createPreferences } from './preferences.js'
+import { createCoordinator } from './coordinator.js'
+import { channelPolicy, deliverNotification } from './delivery.js'
 import { createCompanion, getCompanionStatus } from './companion.js'
 import { renderPresetToDataUrl } from '../audio/wav.js'
 import { SOUND_PRESETS } from '../audio/sounds.js'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { messageForEvent, popupPayload, popupScript, shouldAutoNotify, truncate } from './logic.js'
+import { messageForEvent, popupPayload, popupScript, truncate } from './logic.js'
 
 const PRESENCE_PATH = '/dsh-notify-interactive/presence'
 const WINDOWS_PATH = '/dsh-notify-interactive/windows-notify'
@@ -30,7 +27,7 @@ function resolvePowerShell() {
 }
 
 /** Show one native WinForms reminder. Detached so the host never waits. */
-function showWindowsPopup(title, body, silent = false, url = '') {
+function showWindowsPopup(title, body, silent = false, url = '', popup = true) {
   const executable = resolvePowerShell()
   if (executable === undefined) {
     if (!warnedMissingPowerShell) {
@@ -44,7 +41,7 @@ function showWindowsPopup(title, body, silent = false, url = '') {
       title,
       body,
       silent,
-      typeof url === 'string' && url !== '' ? url : (process.env.DSH_WEB_URL ?? ''),
+      typeof url === 'string' && url !== '' ? url : (process.env.DSH_WEB_URL ?? ''), popup,
     ))
     const encoded = Buffer.from(script, 'utf16le').toString('base64')
     const child = spawn(executable, [
@@ -102,10 +99,27 @@ function writeJson(res, status, value) {
  * Install the host half.
  * @param {object} ctx Host Cordis context.
  */
-export function apply(ctx) {
-  let lastPresence = null
+export function applyHost(ctx, services = {}) {
+  const coordinator = createCoordinator()
+  const timers = new Set()
+  let profile
+  try { profile = ctx.get?.('profileContext') ?? ctx.profileContext } catch { /* Profiles are optional in test/native embeddings. */ }
+  const preferences = createPreferences(profile?.dir ? join(profile.dir, 'notify-interactive.settings.json') : undefined)
+  let presentation = null
+  function authorize(req, res) {
+    try {
+      const connection = ctx.get?.('connection') ?? ctx.connection
+      const rejection = connection?.requestRejection(req) ?? (connection ? undefined : 503)
+      if (rejection === undefined && connection.admit(req)?.peer?.principal?.kind === 'owner') return true
+      if (rejection === undefined) { writeJson(res, 403, { error: 'owner-required' }); return false }
+      writeJson(res, rejection, { error: 'not-authorized' })
+    } catch { writeJson(res, 503, { error: 'connection-unavailable' }) }
+    return false
+  }
+
   const lastNotify = new Map()
-  const companion = createCompanion()
+  const companion = services.companion ?? createCompanion()
+  const legacy = services.legacy ?? showWindowsPopup
   let companionWarning = ''
 
   function notifyOnce(sessionId, kind, title, body, silent = false, url = '') {
@@ -119,10 +133,11 @@ export function apply(ctx) {
         if (now - at > 10 * 60 * 1000) lastNotify.delete(entryKey)
       }
     }
-    return showWindowsPopup(title, body, silent, url)
+    return legacy(title, body, silent, url)
   }
 
   async function presenceRoute(req, res) {
+    if (!authorize(req, res)) return
     if (req.method !== 'POST') {
       res.writeHead(405)
       res.end()
@@ -130,13 +145,13 @@ export function apply(ctx) {
     }
     try {
       const body = await readJson(req)
-      lastPresence = {
-        at: Date.now(),
-        active: body?.active !== false,
-        sessionId: typeof body?.sessionId === 'string' ? body.sessionId : undefined,
-        focused: body?.focused === true,
-        visible: body?.visible === true,
+      coordinator.present(body)
+      const view = body.presentation
+      if (view && typeof view.url === 'string' && /^https?:\/\//.test(view.url)) {
+        const url = new URL(view.url)
+        if (!url.username && !url.password) presentation = { url: url.origin, theme: view.theme ?? {}, openLabel: truncate(view.openLabel ?? 'DSH', 80), closeLabel: truncate(view.closeLabel ?? 'Close', 80) }
       }
+      if (body.focused && body.visible) for (const fact of coordinator.deliveredFor(body.sessionId)) { void companion.withdraw?.(fact.id); void companion.silence?.(fact.id) }
       res.writeHead(204)
       res.end()
     } catch {
@@ -146,6 +161,7 @@ export function apply(ctx) {
   }
 
   async function windowsRoute(req, res) {
+    if (!authorize(req, res)) return
     if (req.method !== 'POST') {
       res.writeHead(405)
       res.end()
@@ -160,7 +176,13 @@ export function apply(ctx) {
       const requestedUrl = typeof body?.url === 'string' && /^https?:\/\//.test(body.url)
         ? body.url
         : (process.env.DSH_WEB_URL ?? '')
-      if (getCompanionStatus().enabled && (kind === 'completion' || kind === 'demo-completion') && requestedUrl) {
+      // Older already-open pages still use this route; share the same host claim.
+      if (coordinator.resolve(sessionId, kind, body.callId) && requestedUrl) {
+        const { status, ...result } = await dispatch({ ...body, sessionId, kind, url: requestedUrl }, true)
+        writeJson(res, status, result)
+        return
+      }
+      if (getCompanionStatus().enabled && ['completion', 'demo-completion', 'demo-approval', 'demo-question', 'demo-plan-review'].includes(kind) && requestedUrl) {
         const url = new URL(requestedUrl)
         url.searchParams.set('dsh-notify-session', sessionId)
         const sound = body?.sound ?? {}
@@ -175,7 +197,7 @@ export function apply(ctx) {
           audio, volume: Number.isFinite(sound.volume) ? Math.max(0, Math.min(1, sound.volume)) : 0.7,
         })
         if (result.status === 'rendered') companionWarning = ''
-        if (result.status === 'rendered' || result.status === 'uncertain') {
+        if (['rendered', 'uncertain', 'queued'].includes(result.status)) {
           writeJson(res, 200, { shown: result.status === 'rendered', delivery: result.status })
           return
         }
@@ -192,11 +214,67 @@ export function apply(ctx) {
     }
   }
 
+  async function settingsRoute(req, res) {
+    if (!authorize(req, res)) return
+    try {
+      if (req.method === 'GET') { res.setHeader?.('cache-control', 'no-store'); writeJson(res, 200, await preferences.snapshot()); return }
+      if (req.method !== 'POST') { writeJson(res, 405, { error: 'method' }); return }
+      const body = await readJson(req, 64000)
+      const next = await preferences.update(body.revision, body.patch, body.initial)
+      if (!next.conflict) for (const fact of coordinator.deliveredFor()) {
+        const policy = channelPolicy(next.settings, fact.kind)
+        if (!policy.popup) void companion.withdraw?.(fact.id)
+        if (!policy.sound) void companion.silence?.(fact.id)
+      }
+      writeJson(res, next.conflict ? 409 : 200, next)
+    } catch { writeJson(res, 503, { error: 'preferences-unavailable' }) }
+  }
+
+  async function dispatch(body, legacyClient = false) {
+    if (typeof body.sessionId !== 'string' || !['approval', 'question', 'plan-review', 'completion'].includes(body.kind)) return { status: 400, shown: false, delivery: 'invalid-event' }
+    const url = new URL(body.url)
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return { status: 400, shown: false, delivery: 'invalid-url' }
+    const fact = coordinator.resolve(body.sessionId, body.kind, body.callId)
+    if (!fact) return { status: 409, shown: false, delivery: 'event-not-current' }
+    presentation = { theme: body.theme ?? {}, url: body.url, openLabel: body.openLabel, closeLabel: body.closeLabel }
+    if (coordinator.attended(body.sessionId) && !coordinator.attended(body.sessionId, fact.at)) await new Promise(resolve => setTimeout(resolve, 1100))
+    const { settings } = await preferences.snapshot()
+    if (!coordinator.claim(fact)) return { status: 200, shown: false, delivery: 'duplicate' }
+    const policy = channelPolicy(settings, body.kind, coordinator.attended(body.sessionId, fact.at))
+    if (legacyClient && body.silent) policy.sound = false
+    url.searchParams.set('dsh-notify-session', body.sessionId)
+    const sessionTitle = truncate(body.sessionTitle ?? '', 200)
+    const text = truncate(body.body ?? '', 500)
+    const prefix = `${sessionTitle} · `
+    const result = await deliverNotification({ companion, available: services.available ?? getCompanionStatus().enabled,
+      legacy, policy,
+      getPolicy: () => { const value = channelPolicy(preferences.current(), body.kind, coordinator.attended(body.sessionId, fact.at)); if (legacyClient && body.silent) value.sound = false; return value },
+      isCurrent: () => coordinator.resolve(body.sessionId, body.kind, body.callId)?.id === fact.id,
+      payload: { eventId: fact.id, sticky: body.kind !== 'completion', title: truncate(body.title ?? 'DSH', 80), sessionTitle,
+        body: sessionTitle && text.startsWith(prefix) ? text.slice(prefix.length) : text,
+        url: url.href, theme: body.theme ?? {}, openLabel: truncate(body.openLabel ?? 'DSH', 80), closeLabel: truncate(body.closeLabel ?? 'Close', 80), webPopup: body.webPopup === true },
+    })
+    coordinator.finish(fact, result.delivery)
+    return { status: 200, ...result }
+  }
+  async function coordinatedDelivery(req, res) {
+    if (!authorize(req, res)) return
+    if (req.method !== 'POST') { writeJson(res, 405, { error: 'method' }); return }
+    try {
+      const { status, ...result } = await dispatch(await readJson(req, 64000))
+      writeJson(res, status, result)
+    } catch { writeJson(res, 503, { shown: false, delivery: 'failed' }) }
+  }
+
   ctx.inject(['webServer'], (scope) => {
+    for (const [path, handler] of [['settings', settingsRoute], ['deliver', coordinatedDelivery]]) {
+      scope.effect(() => scope.webServer.register({ kind: 'exact', path: `/dsh-notify-interactive/${path}`, handler }), `dsh-notify-interactive: ${path}`)
+    }
     scope.effect(() => scope.webServer.register({
       kind: 'exact',
       path: '/dsh-notify-interactive/desktop-status',
       handler(req, res) {
+        if (!authorize(req, res)) return
         if (req.method !== 'GET') { res.writeHead(405); res.end(); return }
         res.setHeader?.('cache-control', 'no-store')
         writeJson(res, 200, getCompanionStatus())
@@ -215,15 +293,42 @@ export function apply(ctx) {
   })
 
   ctx.on('session/event', (session, event) => {
-    if (!shouldAutoNotify(lastPresence)) return
+    const before = ['approval', 'question', 'plan-review', 'completion'].map(kind => coordinator.resolve(session.id, kind)).filter(Boolean)
     const message = messageForEvent(session, event)
-    if (message === null) return
-    notifyOnce(String(session.id), message.kind, message.title, message.body)
+    const fact = coordinator.observe(session, event, message)
+    for (const old of before) if (coordinator.resolve(session.id, old.kind)?.id !== old.id) { void companion.withdraw?.(old.id); void companion.silence?.(old.id) }
+    if (!fact) return
+    const timer = setTimeout(async () => {
+      timers.delete(timer)
+      if (!coordinator.pending(fact)) return
+      try {
+        const { settings } = await preferences.snapshot()
+        const policy = channelPolicy(settings, message.kind, coordinator.attended(session.id, fact.at))
+        if (!coordinator.claim(fact)) return
+        const base = presentation?.url || process.env.DSH_WEB_URL || ''
+        const url = base ? new URL(base) : null
+        url?.searchParams.set('dsh-notify-session', String(session.id))
+        const payload = { eventId: fact.id, sticky: message.kind !== 'completion', title: message.title, sessionTitle: '', body: message.body,
+          url: url?.href ?? 'http://localhost/', theme: presentation?.theme ?? {},
+          openLabel: presentation?.openLabel ?? 'DSH', closeLabel: presentation?.closeLabel ?? 'Close' }
+        const result = await deliverNotification({ companion, policy,
+          available: Boolean(presentation) && (services.available ?? getCompanionStatus().enabled),
+          legacy, payload,
+          getPolicy: () => channelPolicy(preferences.current(), message.kind, coordinator.attended(session.id, fact.at)),
+          isCurrent: () => coordinator.resolve(session.id, message.kind)?.id === fact.id })
+        coordinator.finish(fact, result.delivery)
+      } catch { console.warn('[dsh-notify-interactive] host delivery failed') }
+    }, services.deliveryDelayMs ?? 1800)
+    timers.add(timer)
+    timer.unref?.()
   })
 
   ctx.effect(() => () => {
+    for (const timer of timers) clearTimeout(timer)
+    coordinator.clear()
     companion.dispose()
-    lastPresence = null
     lastNotify.clear()
   }, 'dsh-notify-interactive: host runtime')
 }
+
+export function apply(ctx) { return applyHost(ctx) }

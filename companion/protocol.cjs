@@ -3,6 +3,8 @@ function validateDelivery(message) {
   if (message?.type !== 'deliver' || typeof message.id !== 'string' || !message.id || message.id.length > 160) return false
   if (typeof message.title !== 'string' || message.title.length > 200 || typeof message.body !== 'string' || message.body.length > 2000) return false
   if (typeof message.openLabel !== 'string' || message.openLabel.length > 80) return false
+  if (message.sticky !== undefined && typeof message.sticky !== 'boolean') return false
+  if (message.eventId !== undefined && (typeof message.eventId !== 'string' || message.eventId.length > 2048)) return false
   if (message.sessionTitle !== undefined && (typeof message.sessionTitle !== 'string' || message.sessionTitle.length > 200)) return false
   if (message.closeLabel !== undefined && (typeof message.closeLabel !== 'string' || message.closeLabel.length > 80)) return false
   if (!Number.isFinite(message.volume) || message.volume < 0 || message.volume > 1) return false

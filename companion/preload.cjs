@@ -4,6 +4,6 @@ contextBridge.exposeInMainWorld('reminder', {
   ready: () => ipcRenderer.send('ready'),
   rendered: (id, height) => ipcRenderer.send('rendered', { id, height }),
   audioResult: (id, played) => ipcRenderer.send('audio-result', { id, played }),
-  openSession: () => ipcRenderer.send('open-session'),
-  dismiss: () => ipcRenderer.send('dismiss'),
+  openSession: id => ipcRenderer.send('open-session', id),
+  dismiss: id => ipcRenderer.send('dismiss', id),
 })

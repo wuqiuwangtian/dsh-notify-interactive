@@ -79,7 +79,8 @@ const settingsHtmlEn = renderToStaticMarkup(h(Settings))
 const checks = [
   ['settings title', settingsHtml.includes('互动提醒')],
   ['settings sound section', settingsHtml.includes('音效')],
-  ['settings popup section', settingsHtml.includes('交互弹窗')],
+  ['settings browser answer section', settingsHtml.includes('浏览器作答窗口')],
+  ['settings event channels', settingsHtml.includes('弹窗与触发场景') && settingsHtml.includes('dni-scenarios')],
   ['settings english title', settingsHtmlEn.includes('Interactive notifications')],
   ['popup question card', popupHtml.includes('需要你的回答')],
   ['popup completion card', popupHtml.includes('本轮已结束')],

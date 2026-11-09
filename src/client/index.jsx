@@ -11,6 +11,7 @@ import { findMainSessionId, sessionTitleOf } from '../engine/suppression.js'
 import { createDemoItems } from '../ui/cards/index.jsx'
 import { POPUP_CSS } from '../ui/styles.js'
 import { Settings } from '../ui/Settings.jsx'
+import { createPreferencesSync } from './preferences.js'
 import { createPresenceReporter } from './presence.js'
 
 /** Hard dependencies: slots, locale, the session list, and the session UI adapter. */
@@ -48,7 +49,17 @@ export function apply(ctx) {
   } catch {
     storage = undefined
   }
+  let cachedTheme = snapshotTheme()
   const settingsStore = createSettingsStore(storage)
+  let coordinated = null
+  const preferencesSync = createPreferencesSync(settingsStore, { onStatus: status => { if (status === 'synced') coordinated = true } })
+  runtime.preferencesSync = preferencesSync
+  ctx.effect(() => { preferencesSync.start(); return () => preferencesSync.stop() }, 'dsh-notify-interactive: shared preferences')
+  const clientId = globalThis.crypto?.randomUUID?.() ?? (globalThis.crypto?.getRandomValues
+    ? Array.from(globalThis.crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('')
+    : `page-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  const capability = globalThis.fetch('/dsh-notify-interactive/desktop-status', { cache: 'no-store' })
+    .then(response => response.json()).then(value => { coordinated = value.scope === 'reminders' }).catch(() => {})
   const notificationStore = createNotificationStore()
   const soundPlayer = createSoundPlayer()
   const popupController = createPopupController({
@@ -93,6 +104,7 @@ export function apply(ctx) {
     try {
       const body = JSON.stringify({
         kind: payload?.kind,
+        clientId, callId: payload?.callId, pendingKey: payload?.pendingKey, webPopup: payload?.webPopup,
         sessionId: payload?.sessionId,
         sessionTitle: payload?.sessionTitle ?? (() => {
           const row = ctx.get('sessions')?.list?.getSnapshot?.()?.byId?.[payload?.sessionId]
@@ -101,7 +113,7 @@ export function apply(ctx) {
         title: payload?.title,
         body: payload?.body,
         silent: payload?.silent === true,
-        theme: snapshotTheme(),
+        theme: cachedTheme,
         openLabel: translate('card.openSession'),
         closeLabel: translate('card.close'),
         sound: settingsStore.getSnapshot().sound,
@@ -113,14 +125,14 @@ export function apply(ctx) {
           }
         })(),
       })
-      return globalThis.fetch?.('/dsh-notify-interactive/windows-notify', {
+      return globalThis.fetch?.(payload?.coordinated ? '/dsh-notify-interactive/deliver' : '/dsh-notify-interactive/windows-notify', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body,
         keepalive: true,
       })?.then?.(async response => {
         const result = await response.json()
-        if (!response.ok || result.shown !== true) {
+        if (!response.ok || (!result.shown && !['suppressed', 'duplicate', 'queued'].includes(result.delivery))) {
           console.warn('[dsh-notify-interactive] delivery not confirmed:', result.delivery ?? 'failed')
         }
         return result
@@ -146,6 +158,16 @@ export function apply(ctx) {
     },
     isPopupOpen: () => runtime.surfaceStore.isPopup(),
     onWindowsFallback: windowsFallback,
+    onHostDelivery: async payload => {
+      await capability
+      if (coordinated !== false) return windowsFallback({ ...payload, coordinated: true })
+      // Older hosts keep the legacy reminder path until reloaded.
+      const settings = settingsStore.getSnapshot()
+      const scenario = settings.scenarios[payload.scenarioKey]
+      const preset = scenario?.preset && scenario.preset !== 'inherit' ? scenario.preset : settings.sound.preset
+      const played = payload.gate.sound && soundPlayer.play(preset, settings.sound.volume)
+      if (payload.gate.notify && !payload.webPopup) return windowsFallback({ ...payload, silent: !payload.gate.sound || preset === 'none' || settings.sound.volume <= 0 || played === true })
+    },
   })
 
   runtime.settingsStore = settingsStore
@@ -212,6 +234,7 @@ export function apply(ctx) {
   // Presence lets the host know whether a web surface is currently connected.
   // Without it, the host assumes CLI/TUI and uses the Windows popup fallback.
   const presence = createPresenceReporter({
+    clientId, intervalMs: 1000,
     getState: () => {
       const main = getMainSession()
       return {
@@ -224,6 +247,7 @@ export function apply(ctx) {
           }
         })(),
         visible: globalThis.document?.visibilityState === 'visible',
+        presentation: { theme: cachedTheme, url: globalThis.location?.origin ?? '', openLabel: translate('card.openSession'), closeLabel: translate('card.close') },
       }
     },
   })
@@ -267,8 +291,8 @@ export function apply(ctx) {
     try {
       const status = uiSession?.sessionStatus?.getSnapshot?.()
       if (status === undefined) return
-      engine.ingest(status, sessionsService?.list?.getSnapshot?.())
       presence.report()
+      engine.ingest(status, sessionsService?.list?.getSnapshot?.())
     } catch {
       // A transient service replacement is retried by the next subscription tick.
     }
@@ -302,7 +326,7 @@ export function apply(ctx) {
   }), 'dsh-notify-interactive: settings bridge')
 
   ctx.on('connection/reset', () => engine.reset())
-  ctx.on('theme/change', () => popupController.syncTheme())
+  ctx.on('theme/change', () => { cachedTheme = snapshotTheme(); popupController.syncTheme(); presence.report() })
   ctx.on('locale/change', () => popupController.syncTitle())
 
   ctx.slots.inject('settings.section', () => ctx.slots.register({

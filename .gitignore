@@ -9,3 +9,5 @@ coverage/
 companion/.runtime.json
 
 .playwright-cli/
+
+companion/.runtime-*.tmp

@@ -1,3 +1,4 @@
+import { createCoordinator } from '../src/host/coordinator.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
@@ -7,7 +8,6 @@ import {
   popupScript,
   reasonLabel,
   sessionLabel,
-  shouldAutoNotify,
   truncate,
 } from '../src/host/logic.js'
 
@@ -19,13 +19,16 @@ function session(overrides = {}) {
   }
 }
 
-test('host auto-notifies when no web presence is active', () => {
-  const now = 10_000
-  assert.equal(shouldAutoNotify(null, now), true)
-  assert.equal(shouldAutoNotify({ at: now - 1000, active: true }, now), false)
-  assert.equal(shouldAutoNotify({ at: now - PRESENCE_TTL_MS - 1, active: true }, now), true)
-  assert.equal(shouldAutoNotify({ at: now - 1000, active: false }, now), true)
-  assert.equal(shouldAutoNotify({ at: now - 1000 }, now), true)
+test('an online peer does not imply attendance; focused claims expire', () => {
+  let now = 10000
+  const c = createCoordinator({ now: () => now })
+  assert.equal(c.attended('s1'), false)
+  c.present({ clientId: 'page', active: true, focused: false, visible: true, sessionId: 's1' })
+  assert.equal(c.attended('s1'), false)
+  c.present({ clientId: 'page', active: true, focused: true, visible: true, sessionId: 's1' })
+  assert.equal(c.attended('s1'), true)
+  now += PRESENCE_TTL_MS + 1
+  assert.equal(c.attended('s1'), false)
 })
 
 test('session labels prefer the cwd basename and fall back to the id', () => {

@@ -60,6 +60,7 @@ function createHarness(overrides = {}, options = {}) {
     getFocused: () => options.focused ?? false,
     isPopupOpen: () => options.popupOpen ?? false,
     onWindowsFallback: (payload) => windowsCalls.push(payload),
+    onHostDelivery: options.onHostDelivery,
     now: () => nowValue,
   })
   return {
@@ -269,3 +270,33 @@ for (const kind of ['approval', 'completion']) {
     })
   }
 }
+
+
+test('coordinated engine delegates effects and retains the optional Web card without playing twice', () => {
+  const delivered = []
+  const h = createHarness({}, { onHostDelivery: payload => delivered.push(payload) })
+  try {
+    h.engine.ingest(statusOf(), sessionsOf())
+    h.engine.ingest(statusOf({ pendingInteraction: approval() }), sessionsOf())
+    assert.equal(delivered.length, 1)
+    assert.equal(delivered[0].kind, 'approval')
+    assert.equal(h.notificationStore.count(), 1)
+    h.engine.ingest(statusOf({ running: false }), sessionsOf())
+    assert.equal(delivered.at(-1).kind, 'completion')
+    assert.equal(h.notificationStore.count(), 1)
+    assert.equal(h.soundCalls.length, 0)
+    assert.equal(h.windowsCalls.length, 0)
+  } finally { h.engine.dispose() }
+})
+
+test('sound-only coordinated events do not create popup cards', () => {
+  const delivered = []
+  const h = createHarness({ popup: { enabled: false } }, { onHostDelivery: payload => delivered.push(payload) })
+  try {
+    h.engine.ingest(statusOf(), sessionsOf())
+    h.engine.ingest(statusOf({ running: false }), sessionsOf())
+    assert.equal(delivered.length, 1)
+    assert.equal(h.notificationStore.count(), 0)
+    assert.equal(h.soundCalls.length, 0)
+  } finally { h.engine.dispose() }
+})

@@ -17,11 +17,26 @@ let closeTimer
 let quitting = false
 let awaitingRender = false
 const seen = new Set()
+const revoked = new Set()
+const queue = []
+const audioOnly = new Set()
 const userData = path.join(app.getPath('temp'), `dsh-notify-${randomUUID()}`)
 app.setPath('userData', userData)
-app.on('quit', () => { try { fs.rmSync(userData, { recursive: true, force: true }) } catch { /* Windows may still hold cache files briefly. */ } })
+app.on('quit', () => {
+  try { fs.rmSync(userData, { recursive: true, force: true }) } catch { /* Windows may still hold cache files briefly. */ }
+  // Remove only this connection's UUID mailbox, never an arbitrary argument path.
+  if (mailbox && /^[a-f0-9-]{36}$/.test(path.basename(mailbox)) && ['bridge', 'dsh-notify-bridge'].includes(path.basename(path.dirname(mailbox)))) {
+    try { fs.rmSync(mailbox, { recursive: true, force: true }) } catch { /* Host cleanup is a second chance. */ }
+  }
+})
 
-function hide() { clearTimeout(closeTimer); win?.hide(); current = undefined }
+function pump() {
+  if (current || !queue.length) return
+  current = queue.shift()
+  awaitingRender = true
+  win.webContents.send('reminder', current)
+}
+function hide() { clearTimeout(closeTimer); win?.hide(); current = undefined; awaitingRender = false; pump() }
 
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null)
@@ -51,21 +66,45 @@ app.whenReady().then(async () => {
           if (contents.length > 256000) { send({ type: 'failed', reason: 'message-too-large' }); continue }
           const message = JSON.parse(contents)
           if (message.type === 'shutdown') { app.quit(); return }
+          if (message.type === 'silence' && typeof message.eventId === 'string') {
+            for (const item of queue) if (item.eventId === message.eventId) item.audio = ''
+            win.webContents.send('reminder', { type: 'silence', eventId: message.eventId })
+            continue
+          }
+          if (message.type === 'withdraw' && typeof message.eventId === 'string') {
+            revoked.add(message.eventId)
+            if (revoked.size > 512) revoked.delete(revoked.values().next().value)
+            for (let index = queue.length - 1; index >= 0; index--) if (queue[index].eventId === message.eventId) queue.splice(index, 1)
+            if (current?.eventId === message.eventId) hide()
+            continue
+          }
           if (!validateDelivery(message)) { send({ type: 'failed', id: message?.id, reason: 'invalid-message' }); continue }
+          if (revoked.has(message.eventId)) { send({ type: 'failed', id: message.id, reason: 'stale-event' }); continue }
           if (seen.has(message.id)) { send({ type: 'duplicate', id: message.id }); continue }
           seen.add(message.id)
           if (seen.size > 256) seen.delete(seen.values().next().value)
-          current = message
-          awaitingRender = true
-          clearTimeout(closeTimer)
-          win.webContents.send('reminder', message)
+          if (message.popup === false) {
+            audioOnly.add(message.id)
+            if (audioOnly.size > 256) audioOnly.delete(audioOnly.values().next().value)
+            win.webContents.send('reminder', { ...message, audioOnly: true })
+            continue
+          }
+          if (queue.length >= 64) { send({ type: 'failed', id: message.id, reason: 'queue-full' }); continue }
+          queue.push(message)
+          if (current) send({ type: 'queued', id: message.id })
+          else pump()
         }
       } catch { app.quit() }
     }, 100)
   })
   ipcMain.on('rendered', (event, report) => {
     const id = report?.id
-    if (!fromWindow(event) || current?.id !== id) return
+    if (!fromWindow(event)) return
+    if (audioOnly.has(id)) {
+      send({ type: 'rendered', id, visible: win.isVisible(), focused: win.isFocused() })
+      return
+    }
+    if (current?.id !== id) return
     awaitingRender = false
     if (Number.isFinite(report.height)) win.setSize(360, Math.max(96, Math.min(360, report.height)))
     if (current.popup !== false) {
@@ -76,17 +115,18 @@ app.whenReady().then(async () => {
       win.showInactive()
     } else win.hide()
     send({ type: 'rendered', id, visible: win.isVisible(), focused: win.isFocused(), bounds: win.getBounds(), scaleFactor: screen.getDisplayMatching(win.getBounds()).scaleFactor })
-    closeTimer = setTimeout(hide, 8000)
+    if (!current.sticky) closeTimer = setTimeout(hide, 8000)
   })
   ipcMain.on('audio-result', (event, value) => {
-    if (fromWindow(event) && current?.id === value?.id) send({ type: 'audio', id: value.id, played: value.played === true })
+    if (fromWindow(event) && seen.has(value?.id)) send({ type: 'audio', id: value.id, played: value.played === true })
   })
-  ipcMain.on('open-session', async event => {
-    if (!fromWindow(event) || !current) return
-    try { await shell.openExternal(new URL(current.url).href); hide() }
-    catch { send({ type: 'failed', id: current?.id, reason: 'open-session-failed' }) }
+  ipcMain.on('open-session', async (event, id) => {
+    if (!fromWindow(event) || current?.id !== id) return
+    const opened = current
+    try { await shell.openExternal(new URL(opened.url).href); if (current === opened) hide() }
+    catch { send({ type: 'failed', id: opened.id, reason: 'open-session-failed' }) }
   })
-  ipcMain.on('dismiss', event => { if (fromWindow(event)) hide() })
+  ipcMain.on('dismiss', (event, id) => { if (fromWindow(event) && current?.id === id) hide() })
   await win.loadFile(path.join(__dirname, 'index.html'))
 }).catch(() => { send({ type: 'failed', reason: 'startup-failed' }); app.quit() })
 app.on('before-quit', () => { quitting = true; clearTimeout(closeTimer); clearInterval(inputTimer) })

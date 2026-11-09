@@ -103,7 +103,7 @@ test('desktop protocol rejects active content, privileged URLs and invalid audio
 const { getCompanionStatus } = await import('../src/host/companion.js')
 test('an installed companion is automatic without a startup flag; explicit disable wins', () => {
   const installed = () => ({ executable: 'installed' })
-  assert.deepEqual(getCompanionStatus({}, installed), { mode: 'automatic', available: true, enabled: true, scope: 'completion' })
+  assert.deepEqual(getCompanionStatus({}, installed), { mode: 'automatic', available: true, enabled: true, scope: 'reminders' })
   assert.equal(getCompanionStatus({ DSH_NOTIFY_COMPANION: '0' }, installed).enabled, false)
   const missing = () => { throw new Error('missing') }
   assert.equal(getCompanionStatus({}, missing).enabled, false)

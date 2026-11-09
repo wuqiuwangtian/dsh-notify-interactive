@@ -24,9 +24,9 @@ test('defaults cover sound and every scenario', () => {
   assert.equal(defaults.sound.enabled, true)
   assert.equal(defaults.sound.preset, 'chime')
   for (const key of ['approval', 'question', 'planReview', 'completion']) {
-    assert.deepEqual(defaults.scenarios[key], { sound: true, notify: true })
+    assert.deepEqual(defaults.scenarios[key], { sound: true, notify: true, preset: 'inherit' })
   }
-  assert.equal('popup' in defaults, false)
+  assert.equal(defaults.popup.enabled, true)
   assert.equal('system' in defaults, false)
 })
 
@@ -44,10 +44,10 @@ test('normalization drops unknown keys and repairs invalid values', () => {
   assert.equal(settings.sound.enabled, true)
   assert.equal(settings.sound.preset, 'chime')
   assert.equal(settings.sound.volume, 1)
-  assert.equal('popup' in settings, false)
+  assert.equal(settings.popup.enabled, false)
   assert.equal('system' in settings, false)
   assert.equal('unknown' in settings, false)
-  assert.deepEqual(settings.scenarios.approval, { sound: false, notify: true })
+  assert.deepEqual(settings.scenarios.approval, { sound: false, notify: true, preset: 'inherit' })
 })
 
 test('partial merge keeps unrelated fields and merges one scenario', () => {
@@ -58,8 +58,8 @@ test('partial merge keeps unrelated fields and merges one scenario', () => {
   })
   assert.equal(next.sound.enabled, false)
   assert.equal(next.sound.preset, 'chime')
-  assert.deepEqual(next.scenarios.approval, { sound: true, notify: false })
-  assert.deepEqual(next.scenarios.question, { sound: true, notify: true })
+  assert.deepEqual(next.scenarios.approval, { sound: true, notify: false, preset: 'inherit' })
+  assert.deepEqual(next.scenarios.question, { sound: true, notify: true, preset: 'inherit' })
 })
 
 test('store persists updates and reloads them', () => {
@@ -72,7 +72,7 @@ test('store persists updates and reloads them', () => {
   const reloaded = createSettingsStore(storage)
   assert.equal(reloaded.getSnapshot().sound.preset, 'pulse')
   assert.equal(reloaded.getSnapshot().sound.volume, 0.4)
-  assert.deepEqual(reloaded.getSnapshot().scenarios.completion, { sound: true, notify: false })
+  assert.deepEqual(reloaded.getSnapshot().scenarios.completion, { sound: true, notify: false, preset: 'inherit' })
   assert.equal(reloaded.getStatus().storageError, null)
 })
 

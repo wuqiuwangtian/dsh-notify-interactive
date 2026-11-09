@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { apply } from '../src/host/index.js'
 
-function fakeContext() {
+function fakeContext(rejection) {
   const routes = new Map()
   const events = new Map()
   const scope = {
@@ -19,6 +19,7 @@ function fakeContext() {
     },
   }
   const ctx = {
+    get: key => key === 'connection' ? { requestRejection: () => rejection, admit: () => ({ peer: { principal: { kind: 'owner' } } }) } : undefined,
     inject(deps, callback) {
       if (deps.includes('webServer')) callback(scope)
     },
@@ -76,6 +77,6 @@ test('desktop status route reports capability without exposing local paths', () 
   assert.equal(status, 200)
   assert.equal(typeof payload.enabled, 'boolean')
   assert.equal(typeof payload.available, 'boolean')
-  assert.equal(payload.scope, 'completion')
+  assert.equal(payload.scope, 'reminders')
   assert.deepEqual(Object.keys(payload).sort(), ['available', 'enabled', 'mode', 'scope'])
 })

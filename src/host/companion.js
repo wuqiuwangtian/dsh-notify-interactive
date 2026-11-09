@@ -84,6 +84,7 @@ export function createCompanion(options = {}) {
               if (contents.length > 16000) continue
               const event = JSON.parse(contents)
               if (event.type === 'ready' && event.protocol === 1) { clearTimeout(startupTimer); ready(connection) }
+              if (event.type === 'queued') settle(event.id, { status: 'queued' })
               if (event.type === 'rendered') settle(event.id, { status: 'rendered', visible: event.visible, focused: event.focused })
               if (event.type === 'failed') settle(event.id, { status: 'failed', reason: event.reason })
               options.onEvent?.(event)
@@ -107,17 +108,24 @@ export function createCompanion(options = {}) {
     return attempt
   }
   return {
-    async deliver(payload) {
+    async deliver(payload, prepare) {
       let connection
       try { connection = await start() }
       catch (error) { return { status: 'unavailable', reason: error.message } }
       if (disposed || active !== connection) return { status: 'unavailable', reason: 'companion-disconnected' }
+      if (prepare) { payload = prepare(); if (!payload) return { status: 'suppressed' } }
       const id = randomUUID()
       return new Promise(resolveResult => {
         const timer = setTimeout(() => settle(id, { status: 'uncertain', reason: 'delivery-timeout' }), options.deliveryMs ?? 5000)
         pending.set(id, { resolve: resolveResult, timer, connection })
         command(connection, { ...payload, id, type: 'deliver' }).catch(() => settle(id, { status: 'uncertain', reason: 'mailbox-write-failed' }))
       })
+    },
+    silence(eventId) {
+      if (active && !active.stopped) return command(active, { type: 'silence', eventId }).catch(() => {})
+    },
+    withdraw(eventId) {
+      if (active && !active.stopped) return command(active, { type: 'withdraw', eventId }).catch(() => {})
     },
     dispose() {
       disposed = true
@@ -138,5 +146,5 @@ export function getCompanionStatus(env = process.env, resolveLaunch = resolveCom
   let available = false
   try { resolveLaunch(); available = true } catch { /* Only report capability, never local paths. */ }
   const mode = env.DSH_NOTIFY_COMPANION === '0' ? 'disabled' : env.DSH_NOTIFY_COMPANION === '1' ? 'enabled' : 'automatic'
-  return { mode, available, enabled: mode !== 'disabled' && (mode === 'enabled' || available), scope: 'completion' }
+  return { mode, available, enabled: mode !== 'disabled' && (mode === 'enabled' || available), scope: 'reminders' }
 }

@@ -261,6 +261,14 @@ export const POPUP_CSS = String.raw`
 .dni-section { overflow: hidden; border: 1px solid var(--dsw-alias-border-l1); border-radius: 12px; background: var(--dsw-alias-bg-layer-1); }
 .dni-section-title { margin: 0; padding: 12px 16px 0; color: var(--dsw-alias-label-secondary); font-size: 12px; font-weight: 600; line-height: 18px; }
 .dni-section-body { display: flex; flex-direction: column; }
+.dni-scenarios-master .dni-field { flex-direction: row; align-items: center; }
+.dni-scenarios-master .dni-field-control { width: auto; }
+.dni-scenarios-wrap { padding: 0 16px 12px; overflow-x: auto; }
+.dni-scenarios { width: 100%; border-collapse: collapse; font-size: 13px; }
+.dni-scenarios th, .dni-scenarios td { padding: 10px 6px; text-align: left; border-top: 1px solid var(--dsw-alias-border-l1); }
+.dni-scenarios thead th { color: var(--dsw-alias-label-secondary); font-size: 12px; font-weight: 500; }
+.dni-scenarios tbody th { font-weight: 500; white-space: nowrap; }
+.dni-scenarios .dni-select { min-width: 110px; max-width: 100%; }
 .dni-field { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 16px; border-top: 1px solid var(--dsw-alias-border-l1); }
 .dni-section-title + .dni-section-body .dni-field:first-child { border-top: none; }
 .dni-field-text { min-width: 0; }

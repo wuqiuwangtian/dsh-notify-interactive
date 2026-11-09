@@ -1,6 +1,6 @@
 import { createElement as h, useEffect, useState } from 'react'
 import { runtime } from '../client/runtime.js'
-import { SOUND_PRESET_IDS } from '../state/settings.js'
+import { SOUND_PRESET_IDS, SCENARIO_KEYS } from '../state/settings.js'
 import { useStore } from './useStore.js'
 import { useLocale } from './locale.js'
 import {
@@ -22,6 +22,7 @@ import {
 /** Settings page registered into the DSH Settings panel. */
 export function Settings() {
   const settings = useStore(runtime.settingsStore)
+  const preferencesStatus = useStore(runtime.preferencesSync)
   const notifications = useStore(runtime.notificationStore)
   const popup = useStore(runtime.popupController)
   const { t } = useLocale(runtime.ctx)
@@ -50,7 +51,8 @@ export function Settings() {
         title: t('settings.demoWindowsTitle'), body: t('settings.demoWindowsCompletion'), silent: !settings.sound.enabled,
       })
       setDesktopTest(result?.delivery === 'rendered' ? 'desktopDelivered'
-        : result?.delivery === 'uncertain' ? 'desktopUncertain'
+        : result?.delivery === 'queued' ? 'desktopQueued'
+          : result?.delivery === 'uncertain' ? 'desktopUncertain'
           : result?.delivery === 'process-started' ? 'desktopLegacy' : 'desktopFailed')
     } catch { setDesktopTest('desktopFailed') }
   }
@@ -150,6 +152,8 @@ export function Settings() {
         : null,
     ),
 
+    h('p', { className: 'dni-hint', role: 'status' }, t(`settings.preferences.${preferencesStatus}`)),
+
     h(Section, { title: t('settings.master') },
       h(Field, { label: t('settings.master'), hint: t('settings.masterHint') },
         h(Switch, {
@@ -198,6 +202,37 @@ export function Settings() {
             }, previewLabel),
         ),
       ),
+    ),
+
+    h(Section, { title: t('settings.channels') },
+      h('div', { className: 'dni-scenarios-master' }, h(Field, { label: t('settings.popupEnabled') }, h(Switch, {
+        checked: settings.popup.enabled, label: t('settings.popupEnabled'),
+        onChange: value => update({ popup: { enabled: value } }),
+      }))),
+      h('div', { className: 'dni-scenarios-wrap' }, h('table', { className: 'dni-scenarios' },
+        h('thead', null, h('tr', null,
+          h('th', { scope: 'col' }, t('settings.event')),
+          h('th', { scope: 'col' }, t('settings.popupShort')),
+          h('th', { scope: 'col' }, t('settings.soundShort')),
+          h('th', { scope: 'col' }, t('settings.preset')),
+        )),
+        h('tbody', null, ...SCENARIO_KEYS.map(key => h('tr', { key },
+          h('th', { scope: 'row' }, t(`settings.scenario.${key}`)),
+          h('td', null, h(Switch, { checked: settings.scenarios[key].notify,
+            label: `${t(`settings.scenario.${key}`)} ${t('settings.popupEnabled')}`,
+            onChange: value => update({ scenarios: { [key]: { notify: value } } }),
+          })),
+          h('td', null, h(Switch, { checked: settings.scenarios[key].sound,
+            label: `${t(`settings.scenario.${key}`)} ${t('settings.soundEnabled')}`,
+            onChange: value => update({ scenarios: { [key]: { sound: value } } }),
+          })),
+          h('td', null, h(Select, { value: settings.scenarios[key].preset,
+            label: `${t(`settings.scenario.${key}`)} ${t('settings.preset')}`,
+            options: [{ value: 'inherit', label: t('settings.inheritSound') }, ...soundOptions],
+            onChange: value => update({ scenarios: { [key]: { preset: value } } }),
+          })),
+        ))),
+      )),
     ),
 
     h(Section, { title: t('settings.desktop') },

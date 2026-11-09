@@ -24,7 +24,7 @@ try {
       theme, popup, audio: popup ? '' : renderPresetToDataUrl(SOUND_PRESETS[0]), volume: 0.2,
     })
     console.log(JSON.stringify({ popup, result }))
-    if (result.status !== 'rendered' || result.visible !== popup || result.focused === true) throw new Error('desktop smoke failed')
+    if (!['rendered', 'queued'].includes(result.status) || result.focused === true) throw new Error('desktop smoke failed')
     await new Promise(resolve => setTimeout(resolve, 1200))
   }
   const exited = new Promise(resolve => child.once('exit', resolve))
@@ -43,7 +43,7 @@ const effect = callback => { const cleanup = callback(); if (typeof cleanup === 
 const previous = process.env.DSH_NOTIFY_COMPANION
 delete process.env.DSH_NOTIFY_COMPANION
 try {
-  apply({ inject: (_dependencies, callback) => callback({ webServer: { register: route => { routes.set(route.path, route); return () => {} } }, effect }), on: () => {}, effect })
+  apply({ get: key => key === 'connection' ? { requestRejection: () => undefined, admit: () => ({ peer: { principal: { kind: 'owner' } } }) } : undefined, inject: (_dependencies, callback) => callback({ webServer: { register: route => { routes.set(route.path, route); return () => {} } }, effect }), on: () => {}, effect })
   let capability
   routes.get('/dsh-notify-interactive/desktop-status').handler({ method: 'GET' }, {
     writeHead: () => {}, end: value => { capability = JSON.parse(value) },

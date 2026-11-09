@@ -75,7 +75,8 @@
     "verify": "pnpm build && pnpm check && pnpm test && pnpm render-smoke",
     "render-smoke": "node scripts/render-smoke.mjs",
     "companion:install": "node scripts/install-companion.mjs",
-    "companion:smoke": "pnpm build && node scripts/companion-smoke.mjs"
+    "companion:smoke": "pnpm build && node scripts/companion-smoke.mjs",
+    "coordination:smoke": "pnpm build && node scripts/coordination-smoke.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.25.0",

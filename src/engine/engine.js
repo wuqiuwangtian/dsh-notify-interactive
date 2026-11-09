@@ -47,6 +47,7 @@ export function createEngine(options) {
     getFocused,
     isPopupOpen = () => false,
     onWindowsFallback,
+    onHostDelivery,
     now = () => Date.now(),
   } = options
 
@@ -134,6 +135,11 @@ export function createEngine(options) {
     })
     if (!gate.sound && !gate.notify) return
 
+    if (onHostDelivery) {
+      if (gate.notify) notificationStore.upsert({ id: interactionNotificationId(sessionId, interaction.key), kind, scenario: scenarioKey, sessionId, sessionTitle, interaction, sticky: true, demo: false })
+      onHostDelivery({ kind, sessionId, sessionTitle, title: fallbackTitle(kind), body: interactionBody(interaction, sessionTitle), callId: interaction.callId, pendingKey: interaction.key, webPopup: isPopupOpen(), gate, scenarioKey })
+      return
+    }
     const soundPlayed = gate.sound ? playSound(settings) : false
     if (!gate.notify) return
 
@@ -175,6 +181,18 @@ export function createEngine(options) {
 
     completionCooldown.set(sessionId, timestamp)
     const sessionTitle = sessionTitleOf(sessionList, sessionId)
+    if (onHostDelivery) {
+      if (gate.notify) {
+        const sequence = (completionSequence.get(sessionId) ?? 0) + 1
+        completionSequence.set(sessionId, sequence)
+        const id = completionNotificationId(sessionId, sequence)
+        notificationStore.removeWhere(item => item.sessionId === sessionId && item.kind === 'completion')
+        notificationStore.upsert({ id, kind: 'completion', scenario: 'completion', sessionId, sessionTitle, sticky: false, completedAt: timestamp, demo: false })
+        scheduleCompletionRemoval(id)
+      }
+      onHostDelivery({ kind: 'completion', sessionId, sessionTitle, title: fallbackTitle('completion'), body: truncate([sessionTitle, t('notify.completion.body')].filter(Boolean).join(' · ')), webPopup: isPopupOpen(), gate, scenarioKey: 'completion' })
+      return
+    }
     const soundPlayed = gate.sound ? playSound(settings) : false
     if (!gate.notify) return
 

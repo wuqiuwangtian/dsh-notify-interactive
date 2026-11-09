@@ -111,3 +111,12 @@ GitHub 运行时下载首次返回 504；改用 `ELECTRON_MIRROR=https://npmmirr
 ## 8. 普通重启未启用的原因与修复
 
 实查重启后的 3080 Web 进程环境没有 DSH_NOTIFY_COMPANION=1；此前的原型明确依赖该变量，设置页没有可辨认状态。已改为安装自动检测，显式 0 回退；新增只读状态路由与独立桌面测试按钮，报告已渲染/不确定/旧路径/失败。没有通过热修改进程环境或终止用户服务绕过正常加载。
+
+## 9. P2 所依据的本地 DSH 公开契约（0.2.2-rc.1）
+
+- dsh-app-boot/lib/types/profile-context.d.ts：profileContext.dir 指向本 profile 目录；配置文件放此处，不根据 shell cwd 猜测 profile，不写 session log。
+- dsh-client-connection/lib/types/rpc-host.d.ts、rpc.d.ts：connection.requestRejection(req) 返回 401/403/undefined；admit(req).peer.principal.kind 为 owner 才允许本插件路由。直接 webServer.register 本身不自动执行浏览器认证，不能据此前 UI 401 就假设所有自有路由受保护。
+- dsh-client-ui-approval 的 PendingApproval.key 是各页面本地递增值；跨页面身份使用宿主 approval/asked.id。宿主 approval/decided.id 结束对应请求。Web callId 仅作关联检查，不能把它当成每次权限请求唯一 ID。
+- question key 含 sessionId/callId；tool/result 的 pending:true 表示 continued，不能当成已解决；user/message.source.kind=user-question-reply 及 source.callId 使该问题失效。P2 只读观察这些已提交事件，不发用户消息、不监听新的 waterfall。
+
+实现效果与边界：同一事件共享弹窗/音效认领，旧页面 windows-notify 和新 deliver 路径也共享；主视图焦点需事件后的 heartbeat 证明，不能仅凭在线状态。读取 profile 失败时报告未同步，不覆盖损坏文件。P3 仍需要活跃 Web Pending 对象的注册、显式回答确认与失效校验，本轮没有增加回答端点。

@@ -1,9 +1,4 @@
-/**
- * Report the web surface's focus state to the host.
- *
- * The host uses this presence to decide whether it must show its Windows popup
- * fallback (no web UI connected) or whether the web client owns delivery.
- */
+/** Report per-page attention. The Host owns delivery and requires fresh focus evidence. */
 
 const DEFAULT_ENDPOINT = '/dsh-notify-interactive/presence'
 const DEFAULT_INTERVAL_MS = 5000
@@ -26,11 +21,14 @@ export function createPresenceReporter(options = {}) {
   let timer = null
   let started = false
   let lastReportAt = 0
+  let lastBody = null
 
   function body(active) {
     const state = getState() ?? {}
     return JSON.stringify({
       active,
+      clientId: options.clientId,
+      presentation: state.presentation,
       sessionId: state.sessionId,
       focused: state.focused === true,
       visible: state.visible === true,
@@ -67,7 +65,9 @@ export function createPresenceReporter(options = {}) {
   function report() {
     if (!started) return
     const now = Date.now()
-    if (now - lastReportAt < 1000) return
+    const nextBody = body(true)
+    if (nextBody === lastBody && now - lastReportAt < 1000) return
+    lastBody = nextBody
     lastReportAt = now
     post(true)
   }
