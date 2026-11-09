@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, shell } = require('electron')
+const { app, BrowserWindow, ipcMain, screen, shell, Menu } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
 const { randomUUID } = require('node:crypto')
@@ -24,11 +24,13 @@ app.on('quit', () => { try { fs.rmSync(userData, { recursive: true, force: true 
 function hide() { clearTimeout(closeTimer); win?.hide(); current = undefined }
 
 app.whenReady().then(async () => {
+  Menu.setApplicationMenu(null)
   win = new BrowserWindow({
-    width: 380, height: 220, show: false, alwaysOnTop: true, skipTaskbar: true,
+    width: 360, height: 124, frame: false, thickFrame: false, minHeight: 1, resizable: false, show: false, alwaysOnTop: true, skipTaskbar: true,
     title: 'DSH', minimizable: false, maximizable: false,
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true, backgroundThrottling: false, autoplayPolicy: 'no-user-gesture-required' },
   })
+  win.setMenu(null)
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   win.webContents.on('will-navigate', event => event.preventDefault())
   win.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
@@ -61,16 +63,18 @@ app.whenReady().then(async () => {
       } catch { app.quit() }
     }, 100)
   })
-  ipcMain.on('rendered', (event, id) => {
+  ipcMain.on('rendered', (event, report) => {
+    const id = report?.id
     if (!fromWindow(event) || current?.id !== id) return
     awaitingRender = false
+    if (Number.isFinite(report.height)) win.setSize(360, Math.max(96, Math.min(360, report.height)))
     if (current.popup !== false) {
       const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea
       const [width, height] = win.getSize()
       win.setPosition(Math.max(area.x, area.x + area.width - width - 20), Math.max(area.y, area.y + area.height - height - 20))
       win.showInactive()
     } else win.hide()
-    send({ type: 'rendered', id, visible: win.isVisible(), focused: win.isFocused() })
+    send({ type: 'rendered', id, visible: win.isVisible(), focused: win.isFocused(), bounds: win.getBounds(), scaleFactor: screen.getDisplayMatching(win.getBounds()).scaleFactor })
     closeTimer = setTimeout(hide, 8000)
   })
   ipcMain.on('audio-result', (event, value) => {

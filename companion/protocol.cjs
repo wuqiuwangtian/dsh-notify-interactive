@@ -3,6 +3,7 @@ function validateDelivery(message) {
   if (message?.type !== 'deliver' || typeof message.id !== 'string' || !message.id || message.id.length > 160) return false
   if (typeof message.title !== 'string' || message.title.length > 200 || typeof message.body !== 'string' || message.body.length > 2000) return false
   if (typeof message.openLabel !== 'string' || message.openLabel.length > 80) return false
+  if (message.closeLabel !== undefined && (typeof message.closeLabel !== 'string' || message.closeLabel.length > 80)) return false
   if (!Number.isFinite(message.volume) || message.volume < 0 || message.volume > 1) return false
   if (typeof message.audio !== 'string' || message.audio.length > 200000 || (message.audio !== '' && !/^data:audio\/wav;base64,[A-Za-z0-9+/=]+$/.test(message.audio))) return false
   if (typeof message.url !== 'string' || message.url.length > 4000) return false

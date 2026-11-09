@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- 完成提醒窗口极简化：删除系统标题栏、菜单和重复标题，只保留正文、关闭与主操作；增加 hover/active/focus-visible 和 Esc，按内容调整高度。
+- 同步 Windows 界面文件时复用同版运行时，避免已加载 DLL 的文件锁导致更新失败。
+
 - 修复普通重启不会启用辅助程序的问题：安装自动检测，设置页展示桌面状态与独立测试、投递结果。
 
 - 新增 Arch WSL → Windows Electron 完成提醒原型：按需窗口、主题 token 快照、独立音频、渲染确认与进程恢复；安装后自动启用，`DSH_NOTIFY_COMPANION=0` 强制回退。

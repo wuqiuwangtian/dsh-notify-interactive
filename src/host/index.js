@@ -168,7 +168,7 @@ export function apply(ctx) {
         const audio = body?.silent === true || sound.enabled === false || !preset ? '' : renderPresetToDataUrl(preset)
         const result = await companion.deliver({
           title, body: text, url: url.href, popup: true,
-          openLabel: truncate(body?.openLabel ?? 'DSH', 80), theme: body?.theme ?? {},
+          openLabel: truncate(body?.openLabel ?? 'DSH', 80), closeLabel: truncate(body?.closeLabel ?? 'Close', 80), theme: body?.theme ?? {},
           audio, volume: Number.isFinite(sound.volume) ? Math.max(0, Math.min(1, sound.volume)) : 0.7,
         })
         if (result.status === 'rendered') companionWarning = ''

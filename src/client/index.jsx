@@ -99,6 +99,7 @@ export function apply(ctx) {
         silent: payload?.silent === true,
         theme: snapshotTheme(),
         openLabel: translate('card.openSession'),
+        closeLabel: translate('card.close'),
         sound: settingsStore.getSnapshot().sound,
         url: (() => {
           try {

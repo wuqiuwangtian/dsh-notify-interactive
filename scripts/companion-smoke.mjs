@@ -9,6 +9,8 @@ import { renderPresetToDataUrl } from '../src/audio/wav.js'
 const theme = {
   '--dsw-alias-bg-base': '#1e1f22', '--dsw-alias-label-primary': '#e6e6e6',
   '--dsw-alias-bg-layer-2': '#2d2e32', '--dsw-alias-border-l1': '#555',
+  '--dsw-alias-label-primary-foreground': '#fff', '--dsw-alias-button-primary-fill': '#4d6bfe',
+  '--dsw-alias-interactive-bg-hover': '#393a40', '--dsw-alias-button-primary-hover': '#5c78ff',
   '--dsw-alias-brand-primary': '#4d6bfe', '--ds-font-family': 'Segoe UI, sans-serif',
 }
 const events = []
@@ -18,7 +20,7 @@ try {
   for (const popup of [true, false, true]) {
     const result = await companion.deliver({
       title: 'DSH 提醒原型', body: popup ? 'WSL → Windows：无需预开通知窗口。此为演示，不是真实会话事件。' : '',
-      openLabel: '打开 DSH', url: 'http://localhost:3000/?dsh-notify-session=demo',
+      openLabel: '打开会话', closeLabel: '关闭', url: 'http://localhost:3000/?dsh-notify-session=demo',
       theme, popup, audio: popup ? '' : renderPresetToDataUrl(SOUND_PRESETS[0]), volume: 0.2,
     })
     console.log(JSON.stringify({ popup, result }))
@@ -28,7 +30,7 @@ try {
   const exited = new Promise(resolve => child.once('exit', resolve))
   child.kill()
   await exited
-  const recovered = await companion.deliver({ title: 'DSH 重连测试', body: '进程中断后自动重新启动。', openLabel: '打开 DSH', url: 'http://localhost:3000/', theme, popup: true, audio: '', volume: 0 })
+  const recovered = await companion.deliver({ title: 'DSH 重连测试', body: '进程中断后自动重新启动。', openLabel: '打开会话', closeLabel: '关闭', url: 'http://localhost:3000/', theme, popup: true, audio: '', volume: 0 })
   console.log(JSON.stringify({ recovery: recovered }))
   if (recovered.status !== 'rendered' || recovered.focused === true) throw new Error('recovery failed')
   if (!events.some(event => event.type === 'audio' && event.played === true)) throw new Error('desktop audio did not start')

@@ -1,6 +1,14 @@
 :root { color-scheme: light dark; }
-body { margin: 0; padding: 20px; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font-family: var(--ds-font-family); }
-h1 { font-size: 16px; margin: 0 0 12px; }
-p { font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
-button { font: inherit; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-2); border: 1px solid var(--dsw-alias-border-l1); padding: 7px 12px; border-radius: 6px; cursor: pointer; }
-button:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: 14px/1.55 var(--ds-font-family); }
+#card { padding: 16px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 10px; }
+#card[hidden] { display: none; }
+p { margin: 0 0 14px; max-height: 240px; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.actions { display: flex; justify-content: flex-end; gap: 8px; }
+button { min-height: 32px; padding: 5px 12px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 6px; background: transparent; color: var(--dsw-alias-label-primary); font: inherit; line-height: 1.4; cursor: pointer; transition: background-color 120ms ease, border-color 120ms ease; }
+button:hover { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+button:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
+button:active { transform: translateY(1px); }
+.primary { border-color: transparent; background: var(--dsw-alias-button-primary-fill, var(--dsw-alias-brand-primary)); color: var(--dsw-alias-label-primary-foreground, var(--dsw-alias-label-primary)); }
+.primary:hover { background: var(--dsw-alias-button-primary-hover, color-mix(in srgb, var(--dsw-alias-brand-primary) 85%, var(--dsw-alias-label-primary))); }
+@media (prefers-reduced-motion: reduce) { button { transition: none; } }

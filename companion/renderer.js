@@ -7,9 +7,10 @@ window.reminder.onMessage(message => {
       document.documentElement.style.setProperty(name, value)
     }
   }
-  document.getElementById('title').textContent = message.title
   document.getElementById('body').textContent = message.body
   document.getElementById('open').textContent = message.openLabel
+  // Older running hosts do not forward closeLabel yet; preserve their UI language.
+  document.getElementById('close').textContent = message.closeLabel ?? (/[\u3400-\u9fff]/.test(message.openLabel) ? '关闭' : 'Close')
   card.hidden = message.popup === false
   if (message.audio) {
     audio?.pause()
@@ -18,8 +19,11 @@ window.reminder.onMessage(message => {
     audio.play().then(() => window.reminder.audioResult(message.id, true), () => window.reminder.audioResult(message.id, false))
   }
   // Reading layout confirms the local card exists, not that the user saw it.
-  card.getBoundingClientRect()
-  window.reminder.rendered(message.id)
+  window.reminder.rendered(message.id, Math.ceil(card.getBoundingClientRect().height))
 })
 document.getElementById('open').onclick = () => window.reminder.openSession()
+document.getElementById('close').onclick = () => window.reminder.dismiss()
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') window.reminder.dismiss()
+})
 window.reminder.ready()

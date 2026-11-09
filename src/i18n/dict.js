@@ -8,6 +8,7 @@ export const LOCALE_NAMESPACE = 'notifyInteractive'
 
 export const dictionaries = {
   en: {
+    'card.close': 'Close',
     'settings.desktop': 'Desktop completion reminders',
     'settings.desktopLoading': 'Checking the desktop companion…',
     'settings.desktopHostUnavailable': 'Desktop status is unavailable. Restart the DSH host to load the updated plugin, then refresh this page.',
@@ -114,6 +115,7 @@ export const dictionaries = {
     'sound.none': 'Silent',
   },
   zh: {
+    'card.close': '关闭',
     'settings.desktop': '桌面完成提醒',
     'settings.desktopLoading': '正在检查桌面辅助程序…',
     'settings.desktopHostUnavailable': '无法读取桌面状态。请重启 DSH 宿主加载新版插件，再刷新页面。',
