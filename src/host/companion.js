@@ -132,3 +132,11 @@ export function createCompanion(options = {}) {
     },
   }
 }
+
+/** Installation is sufficient by default; explicit 0 retains the legacy path. */
+export function getCompanionStatus(env = process.env, resolveLaunch = resolveCompanionLaunch) {
+  let available = false
+  try { resolveLaunch(); available = true } catch { /* Only report capability, never local paths. */ }
+  const mode = env.DSH_NOTIFY_COMPANION === '0' ? 'disabled' : env.DSH_NOTIFY_COMPANION === '1' ? 'enabled' : 'automatic'
+  return { mode, available, enabled: mode !== 'disabled' && (mode === 'enabled' || available), scope: 'completion' }
+}

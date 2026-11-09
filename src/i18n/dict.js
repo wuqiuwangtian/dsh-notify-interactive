@@ -8,6 +8,19 @@ export const LOCALE_NAMESPACE = 'notifyInteractive'
 
 export const dictionaries = {
   en: {
+    'settings.desktop': 'Desktop completion reminders',
+    'settings.desktopLoading': 'Checking the desktop companion…',
+    'settings.desktopHostUnavailable': 'Desktop status is unavailable. Restart the DSH host to load the updated plugin, then refresh this page.',
+    'settings.desktopDisabled': 'Desktop companion disabled by DSH_NOTIFY_COMPANION=0.',
+    'settings.desktopMissing': 'Desktop companion not installed. Run pnpm companion:install in the plugin repository.',
+    'settings.desktopReady': 'Desktop companion ready. Completion reminders open automatically; approvals and questions still use the previous path.',
+    'settings.desktopTest': 'Test desktop completion reminder',
+    'settings.desktopTesting': 'Waiting for desktop confirmation…',
+    'settings.desktopDelivered': 'The desktop confirmed that the reminder was rendered.',
+    'settings.desktopUncertain': 'No desktop confirmation received; a second popup was avoided.',
+    'settings.desktopLegacy': 'The legacy Windows reminder was started; the desktop companion was unavailable. Check host diagnostics.',
+    'settings.desktopFailed': 'Delivery failed. Check the DSH host diagnostics.',
+
     'settings.nav': 'Interactive notifications',
     'settings.title': 'Interactive notifications',
     'settings.description': 'Stay silent while you are focused on the conversation. Otherwise use the interactive popup, or the Windows popup fallback when it is unavailable.',
@@ -101,6 +114,19 @@ export const dictionaries = {
     'sound.none': 'Silent',
   },
   zh: {
+    'settings.desktop': '桌面完成提醒',
+    'settings.desktopLoading': '正在检查桌面辅助程序…',
+    'settings.desktopHostUnavailable': '无法读取桌面状态。请重启 DSH 宿主加载新版插件，再刷新页面。',
+    'settings.desktopDisabled': '桌面辅助程序已被 DSH_NOTIFY_COMPANION=0 禁用。',
+    'settings.desktopMissing': '桌面辅助程序尚未安装，请在插件仓库运行 pnpm companion:install。',
+    'settings.desktopReady': '桌面辅助程序已就绪，完成提醒会自动弹出；审批和提问仍走旧路径。',
+    'settings.desktopTest': '测试桌面完成提醒',
+    'settings.desktopTesting': '正在等待桌面确认…',
+    'settings.desktopDelivered': '桌面已确认提醒渲染完成。',
+    'settings.desktopUncertain': '尚未收到桌面确认，为避免重复没有再次弹窗。',
+    'settings.desktopLegacy': '已启动旧版 Windows 提醒；桌面辅助程序不可用，请检查宿主诊断。',
+    'settings.desktopFailed': '投递失败，请检查 DSH 宿主诊断。',
+
     'settings.nav': '互动提醒',
     'settings.title': '互动提醒',
     'settings.description': '聚焦当前会话时不打扰；否则优先使用交互弹窗，弹窗不可用时自动使用 Windows 弹窗提醒。',

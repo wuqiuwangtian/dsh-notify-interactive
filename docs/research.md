@@ -107,3 +107,7 @@ GitHub 运行时下载首次返回 504；改用 `ELECTRON_MIRROR=https://npmmirr
 `pnpm companion:smoke`：Windows 真实进程依次确认 visible=true/focused=false、visible=false 且 audio played=true、再次 visible=true；杀掉启动进程后下一条消息重新启动并 rendered。真实构建后 Host 路由（mock DSH webServer）返回 200 / shown=true / delivery=rendered。它验证桌面与宿主代码路径，不是实际 DSH 会话端到端。
 
 播放器开始播放不等于听感验收；窗口 visible 不等于用户在全屏/锁屏下必然看到。主题视觉、真实完成事件、回对应会话仍待用户运行中的 Web 验收。多事件 UI 队列、多标签去重、统一设置与所有场景交互按 P2/P3 实施。
+
+## 8. 普通重启未启用的原因与修复
+
+实查重启后的 3080 Web 进程环境没有 DSH_NOTIFY_COMPANION=1；此前的原型明确依赖该变量，设置页没有可辨认状态。已改为安装自动检测，显式 0 回退；新增只读状态路由与独立桌面测试按钮，报告已渲染/不确定/旧路径/失败。没有通过热修改进程环境或终止用户服务绕过正常加载。

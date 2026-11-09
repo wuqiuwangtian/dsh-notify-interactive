@@ -153,6 +153,13 @@ export function apply(ctx) {
   runtime.openSession = openSession
   runtime.getMainSession = getMainSession
   runtime.windowsFallback = windowsFallback
+  runtime.getDesktopStatus = async () => {
+    try {
+      const response = await globalThis.fetch('/dsh-notify-interactive/desktop-status', { cache: 'no-store' })
+      if (!response.ok) return { reason: 'host-unavailable' }
+      return await response.json()
+    } catch { return { reason: 'host-unavailable' } }
+  }
   runtime.openPopup = () => popupController.open()
   runtime.closePopup = () => popupController.close()
   runtime.resetSettings = () => settingsStore.reset()

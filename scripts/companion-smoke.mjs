@@ -39,9 +39,15 @@ const routes = new Map()
 const cleanups = []
 const effect = callback => { const cleanup = callback(); if (typeof cleanup === 'function') cleanups.push(cleanup) }
 const previous = process.env.DSH_NOTIFY_COMPANION
-process.env.DSH_NOTIFY_COMPANION = '1'
+delete process.env.DSH_NOTIFY_COMPANION
 try {
   apply({ inject: (_dependencies, callback) => callback({ webServer: { register: route => { routes.set(route.path, route); return () => {} } }, effect }), on: () => {}, effect })
+  let capability
+  routes.get('/dsh-notify-interactive/desktop-status').handler({ method: 'GET' }, {
+    writeHead: () => {}, end: value => { capability = JSON.parse(value) },
+  })
+  console.log(JSON.stringify({ desktopStatus: capability }))
+  if (!capability.enabled || capability.mode !== 'automatic') throw new Error('automatic enablement failed')
   const request = new EventEmitter()
   request.method = 'POST'
   let status

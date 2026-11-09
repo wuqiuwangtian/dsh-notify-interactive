@@ -9,7 +9,7 @@
  * when its interactive popup cannot be opened.
  */
 
-import { createCompanion } from './companion.js'
+import { createCompanion, getCompanionStatus } from './companion.js'
 import { renderPresetToDataUrl } from '../audio/wav.js'
 import { SOUND_PRESETS } from '../audio/sounds.js'
 import { spawn } from 'node:child_process'
@@ -160,7 +160,7 @@ export function apply(ctx) {
       const requestedUrl = typeof body?.url === 'string' && /^https?:\/\//.test(body.url)
         ? body.url
         : (process.env.DSH_WEB_URL ?? '')
-      if (process.env.DSH_NOTIFY_COMPANION === '1' && (kind === 'completion' || kind === 'demo-completion') && requestedUrl) {
+      if (getCompanionStatus().enabled && (kind === 'completion' || kind === 'demo-completion') && requestedUrl) {
         const url = new URL(requestedUrl)
         url.searchParams.set('dsh-notify-session', sessionId)
         const sound = body?.sound ?? {}
@@ -190,6 +190,15 @@ export function apply(ctx) {
   }
 
   ctx.inject(['webServer'], (scope) => {
+    scope.effect(() => scope.webServer.register({
+      kind: 'exact',
+      path: '/dsh-notify-interactive/desktop-status',
+      handler(req, res) {
+        if (req.method !== 'GET') { res.writeHead(405); res.end(); return }
+        res.setHeader?.('cache-control', 'no-store')
+        writeJson(res, 200, getCompanionStatus())
+      },
+    }), 'dsh-notify-interactive: desktop status')
     scope.effect(() => scope.webServer.register({
       kind: 'exact',
       path: PRESENCE_PATH,

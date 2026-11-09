@@ -29,6 +29,31 @@ export function Settings() {
   const [audioReady, setAudioReady] = useState(() => runtime.soundPlayer?.isReady?.() ?? false)
   const [previewStatus, setPreviewStatus] = useState(null)
   const [resetDone, setResetDone] = useState(false)
+  const [desktop, setDesktop] = useState(null)
+  const [desktopTest, setDesktopTest] = useState(null)
+  useEffect(() => {
+    let active = true
+    runtime.getDesktopStatus().then(value => { if (active) setDesktop(value) })
+    return () => { active = false }
+  }, [])
+  const desktopStatusKey = desktop === null ? 'desktopLoading'
+    : desktop.reason === 'host-unavailable' ? 'desktopHostUnavailable'
+      : desktop.mode === 'disabled' ? 'desktopDisabled'
+        : !desktop.available ? 'desktopMissing' : 'desktopReady'
+
+  async function testDesktop() {
+    setDesktopTest('desktopTesting')
+    try {
+      const main = runtime.getMainSession?.() ?? {}
+      const result = await runtime.windowsFallback({
+        kind: 'demo-completion', sessionId: main.id ?? 'demo-session',
+        title: t('settings.demoWindowsTitle'), body: t('settings.demoWindowsCompletion'), silent: !settings.sound.enabled,
+      })
+      setDesktopTest(result?.delivery === 'rendered' ? 'desktopDelivered'
+        : result?.delivery === 'uncertain' ? 'desktopUncertain'
+          : result?.delivery === 'process-started' ? 'desktopLegacy' : 'desktopFailed')
+    } catch { setDesktopTest('desktopFailed') }
+  }
 
   useEffect(() => {
     setPreviewStatus(null)
@@ -173,6 +198,16 @@ export function Settings() {
             }, previewLabel),
         ),
       ),
+    ),
+
+    h(Section, { title: t('settings.desktop') },
+      h('p', { className: 'dni-hint' }, t(`settings.${desktopStatusKey}`)),
+      h(Button, {
+        variant: 'outline', size: 'sm',
+        disabled: !desktop?.enabled || !desktop?.available || desktopTest === 'desktopTesting',
+        onClick: testDesktop,
+      }, t('settings.desktopTest')),
+      desktopTest !== null ? h('p', { className: 'dni-hint', role: 'status' }, t(`settings.${desktopTest}`)) : null,
     ),
 
     h(Section, { title: t('settings.popup') },

@@ -65,3 +65,17 @@ test('host presence route accepts an active web peer', async () => {
   await pending
   assert.equal(res.status, 204)
 })
+
+test('desktop status route reports capability without exposing local paths', () => {
+  const { routes } = fakeContext()
+  let status
+  let payload
+  routes.get('/dsh-notify-interactive/desktop-status').handler({ method: 'GET' }, {
+    writeHead: value => { status = value }, end: value => { payload = JSON.parse(value) },
+  })
+  assert.equal(status, 200)
+  assert.equal(typeof payload.enabled, 'boolean')
+  assert.equal(typeof payload.available, 'boolean')
+  assert.equal(payload.scope, 'completion')
+  assert.deepEqual(Object.keys(payload).sort(), ['available', 'enabled', 'mode', 'scope'])
+})

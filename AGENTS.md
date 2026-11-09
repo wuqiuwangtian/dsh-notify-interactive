@@ -8,7 +8,7 @@
 
 2026-11-09：已授权开始 P0 调查与开发。0.2.1 仍是受限实现，尚未完成基础体验；不要将旧“第一阶段完成”当成验收结论。有效目标、待定方案和 P0–P5 计划见 `docs/requirements.md`；现状证据见 `docs/research.md`。
 
-当前代码仅支持手动打开 Web 交互窗与 Windows/WSL WinForms 兜底，无 Linux 桌面适配；用户已确认继续使用浏览器并接受桌面辅助程序；不要求换客户端。本轮重点为 Arch WSL DSH Web → Windows；TUI 与 DSH Desktop 不扩展。Linux 原生桌面后续验收。完成提醒 Electron 原型需 `DSH_NOTIFY_COMPANION=1` 显式启用，尚非完整新方案。
+当前代码仅支持手动打开 Web 交互窗与 Windows/WSL WinForms 兜底，无 Linux 桌面适配；用户已确认继续使用浏览器并接受桌面辅助程序；不要求换客户端。本轮重点为 Arch WSL DSH Web → Windows；TUI 与 DSH Desktop 不扩展。Linux 原生桌面后续验收。完成提醒 Electron 原型安装后自动启用，`DSH_NOTIFY_COMPANION=0` 强制回退，尚非完整新方案。
 
 ## 关键约束
 

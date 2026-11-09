@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-- 新增 Arch WSL → Windows Electron 完成提醒原型：按需窗口、主题 token 快照、独立音频、渲染确认与进程恢复；通过 `DSH_NOTIFY_COMPANION=1` 显式启用。
+- 修复普通重启不会启用辅助程序的问题：安装自动检测，设置页展示桌面状态与独立测试、投递结果。
+
+- 新增 Arch WSL → Windows Electron 完成提醒原型：按需窗口、主题 token 快照、独立音频、渲染确认与进程恢复；安装后自动启用，`DSH_NOTIFY_COMPANION=0` 强制回退。
 - 新增独立安装/桌面冒烟脚本；窗口运行于 Windows LocalAppData，采用连接隔离文件邮箱。
 - 新增插件自有会话返回参数；真实 DSH 会话定位仍待验收。
 - 修复 Web 静音配置在 Windows 兜底中漏音。原型未实现审批/提问桌面交互、统一设置或 Linux 原生桌面支持。

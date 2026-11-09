@@ -26,5 +26,6 @@ export const runtime = {
   getMainSession: () => ({ id: undefined, title: undefined }),
   resetSettings: () => {},
   windowsFallback: () => {},
+  getDesktopStatus: async () => ({ reason: 'host-unavailable' }),
   previewSound: () => false,
 }
