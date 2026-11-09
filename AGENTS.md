@@ -4,26 +4,24 @@
 
 ## 项目定位
 
-`dsh-notify-interactive` 在 DSH 需要人继续操作时提醒用户：
+`dsh-notify-interactive` 的目标是未聚焦事件所属会话时，自动提供 DSH 风格提醒；覆盖审批、提问/计划和一轮结束，弹窗/音效独立配置，基础兼容 Windows 与 Linux。
 
-- 权限审批、提问 / 计划审核、任务完成；
-- **正在看当前会话时完全静默**；
-- 否则优先使用 Web 交互弹窗（Document PiP / 普通弹窗）；
-- 弹窗未打开或不可用时，由宿主显示 Windows 弹窗提醒（只提醒，不能作答）；
-- CLI/TUI 没有 Web UI 时，宿主直接走 Windows 弹窗。
+2026-11-09：已授权开始 P0 调查与开发。0.2.1 仍是受限实现，尚未完成基础体验；不要将旧“第一阶段完成”当成验收结论。有效目标、待定方案和 P0–P5 计划见 `docs/requirements.md`；现状证据见 `docs/research.md`。
+
+当前代码仅支持手动打开 Web 交互窗与 Windows/WSL WinForms 兜底，无 Linux 桌面适配；用户已确认继续使用浏览器并接受桌面辅助程序；不要求换客户端。Linux 桌面目标与现场地址待补充，先验证关键能力再铺开实现。
 
 ## 关键约束
 
-- **不自动作答**：审批/提问必须由用户在 DSH Web 或终端里处理；Windows 兜底只提醒。
+- **不自动作答**：只能通过用户在 DSH 或交互弹窗中的显式操作提交；系统兜底只提醒。独立桌面应答接口需先验证，不假定可用。
 - **不写 session log**：不 append 事件、不注册模型工具、不注入 prompt。
 - **不监听 approval/question waterfall**：宿主只观察 `session/event`，不改变审批链。
 - **不要重新加回页内通知卡片**；如果产品要求变化，先读需求文档。
-- **不要重新加浏览器 Notification 通道**；Windows 兜底由宿主 PowerShell 负责。
+- **不要未经方案确认重新加浏览器 Notification 通道**；当前 Windows 兜底由宿主 PowerShell 负责，目标 Linux 系统通知需另做适配。
 - **样式只用主题 token**：`--dsw-*` / `--dsh-*` / `--ds-*`；弹窗通过 `src/ui/theme.js` 复制主文档解析值。
 - **极简 UI**：卡片只保留标题、必要上下文、会话入口和操作；不要加图标、副标题、后端徽标、页脚提示等非操作内容。
 - **产物提交**：`lib/client.js` 由 `src/` 构建，必须同步提交；CI 会 `git diff --exit-code`。
 
-## 架构
+## 当前实现架构（不代表目标方案）
 
 - `src/client/`：Web 半区。观察 `uiSession.sessionStatus` + `sessions.list`；维护通知引擎；上报 presence；管理交互弹窗。
 - `src/host/`：宿主半区。观察 `session/event`；在没有活跃 Web presence 时通过 PowerShell 弹 Windows 提醒；提供 presence / windows-notify 路由。
@@ -72,4 +70,4 @@ pnpm verify      # build + node --check + node --test + render smoke
 
 - 页面加载后 `globalThis.__dshNotifyInteractive` 暴露 runtime：`openPopup()`、`closePopup()`、`addDemo(kind)`、`windowsFallback(payload)`、`getMainSession()`、`settingsStore`、`notificationStore`、`popupController`。
 - 设置页可测试三类交互卡片和 Windows 兜底。
-- 宿主 Windows 弹窗使用 `WScript.Shell.Popup`；路径检测：Windows `powershell.exe`，WSL `/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe`。
+- 宿主 Windows 弹窗使用 PowerShell WinForms（不是 `WScript.Shell.Popup`）；路径检测：Windows `powershell.exe`，WSL `/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe`。

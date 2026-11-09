@@ -1,98 +1,86 @@
-# 同类项目调研与设计结论
+# 现状审阅与能力调查
 
-调研日期：2026-11-07 / 2026-11-08。数据来自 GitHub 搜索、仓库 README 与 DSH 安装包内公开类型/实现。
+更新：2026-11-09。用途：记录方案依据；有效需求及阶段状态统一见 [requirements.md](requirements.md)。
 
-## 1. 结论
+## 1. 本轮证据范围
 
-**没有找到完全满足当前要求的活跃项目。** 当前要求是：
+- 静态审阅 `src/client/`、`src/host/`、`src/engine/`、设置、音效、弹窗和交互卡片。
+- 本地 DSH 安装包版本确认为 `0.2.2-rc.1`；复核其审批和提问 Pending 类型，确有 answer 方法。
+- 本轮运行 46 项单元测试、渲染冒烟、产物语法检查，均通过。没有启动真实弹窗、安装插件、操作用户会话或验证 Linux 桌面。
+- 用户报告“原先需预开窗口，后续弹不出、Windows 效果不好”。以下解释代码路径与风险，不能替代对用户现场故障的复现。
 
-1. 权限审批、提问/计划审核、任务完成时提醒；
-2. 正在看当前会话时完全静默；
-3. 否则优先显示可交互的 DSH 风格弹窗；
-4. 弹窗不可用（或 CLI/TUI）时显示 Windows 提醒，且 Windows 只能提醒；
-5. DSH 风格、极简 UI；
-6. MIT、活跃维护。
+## 2. 为什么现有方向达不到目标
 
-最接近的项目分别在“弹窗可交互”“CLI/TUI 兜底”“DSH 风格”“Web 插件形态”上缺一项或多项，因此继续开发。
+| 发现 | 代码依据 | 影响与结论 |
+|---|---|---|
+| 事件不会自动打开 Web 弹窗 | `src/engine/engine.js` 只在 isPopupOpen 为假时调用 Windows 兜底；`src/client/index.jsx` 的 openPopup 由 UI 调用 | 收到事件不会出现 DSH 自绘窗，是现有设计行为，不只是窗口样式 bug |
+| 不能靠一直保留窗口修复 | `src/ui/Settings.jsx` 无卡片时禁用打开；`src/ui/PopupApp.jsx` 队列空即关闭；完成卡 8 秒移除 | 后续事件仍需再次手动打开；与早期 requirements/verification 的“空窗常驻”描述矛盾 |
+| 在线不代表成功投递 | `src/host/logic.js` shouldAutoNotify 仅看 active/15 秒 TTL；host 忽略上报的焦点与会话信息 | Web 在线但故障时宿主放弃投递；后台冻结也是风险，具体现场需复现 |
+| 缺少端到端结果 | `src/client/index.jsx` fetch 不检查 HTTP/body；`src/host/index.js` detached spawn 使用 stdio ignore、空 error handler | `{ shown: true }` 仅表示尝试启动成功，不能证明桌面已显示；真实进程错误难以诊断 |
+| 总开关和音效仅属于 Web | `src/state/settings.js` localStorage；host 不读取其配置 | 页面关闭/CLI 下宿主仍可通知；音效关掉但 Web 未播放时，silent=false 仍可能触发 Windows 系统音 |
+| 只有 Windows 桌面路径 | host 检测 powershell.exe 或 WSL 固定路径 | Linux 原生桌面没有投递适配；WSL 不等于 Linux 桌面兼容 |
+| 返回没有准确定位 | client 仅向 Windows 路由传 location.origin；host payload 无 sessionId | Windows“打开 DSH”无法保证跳回事件所属会话；Web openSession 另有现成入口但跨窗口聚焦 best effort |
+| 事件去重过粗 | host 以 sessionId:kind 两秒冷却；presence 只有一个 lastPresence | 不同真实请求可能误合并，多标签互相覆盖；缺事件级身份与投递协调 |
+| Web 初次快照不发事件 | `src/engine/diff.js` 为新出现会话建立基线 | 防重放有价值，但恢复时已有待办不会主动提醒，需区分恢复待办与重复通知 |
+| 独立样式不一致 | `src/ui/theme.js` 复制 DSH token；PowerShell 脚本硬编码颜色和字体 | Web 主题可复用；WinForms 不跟随 DSH 主题，且逐事件启动进程并主动 Activate |
 
-## 2. 候选对比
+上述任一风险都不能直接认定为用户“后来都弹不出”的唯一根因。P0 应按事件生成 → 策略抑制 → 投递请求 → HTTP 响应 → 进程退出/窗口显示逐段定位；临时诊断不得写 session log 或收集回答内容。
 
-| 项目 | 许可证 / 活跃度 | 已满足 | 关键缺口 |
-|---|---|---|---|
-| [yiumanlenong/dsh-popup-notify](https://github.com/yiumanlenong/dsh-popup-notify) | MIT；0 star；最后推送 2026-10-21 | Windows 置顶模态弹窗；审批/提问/计划/完成；音效开关 | 弹窗**不可交互**；无 CLI/TUI 兜底 |
-| [qingfengyu153781-star/dsh-approval-popup](https://github.com/qingfengyu153781-star/dsh-approval-popup) | MIT；1 star；最后推送 2026-08-15 | 原生 Yes/No 审批弹窗；完成提醒 | 只支持审批；无提问/自定义回答；无 CLI/TUI 兜底 |
-| [Aisland-SJL/dsh-reminder](https://github.com/Aisland-SJL/dsh-reminder) | MIT；19 star；最后推送 2026-08-16 | 跨窗口提醒；完成/审批；点击回会话；音效 | 弹窗内不能作答；Chrome 通知不支持 actions |
-| [THEWOLFWALKER/dsh-notifier](https://github.com/THEWOLFWALKER/dsh-notifier) | MIT；活跃 | 手机/多通道；可审批/回答 `ask_user` | 不是 DSH 风格桌面弹窗；体系重 |
-| [dsh-tauri/deepseek-harness-desktop](https://github.com/dsh-tauri/deepseek-harness-desktop) 内置通知 | MIT；活跃 | 桌面壳原生通知；带“批准”动作 | 整个桌面 App，不是 dsh-web 插件；不支持提问自定义回答 |
-| [Phant0Meow/dsh-meow-smooth](https://github.com/Phant0Meow/dsh-meow-smooth) | 活跃 | 页内卡片 + 系统通知 + 点击跳转 | 页内通知；不是可作答的 Windows 弹窗 |
-| [610la/dsh-notification-center](https://github.com/610la/dsh-notification-center) | MIT；活跃 | 浏览器通知 + 21 音效；按事件配置 | 弹窗不可作答 |
-| [GeekRicardo/dsh-notification](https://github.com/GeekRicardo/dsh-notification) | MIT；活跃 | 浏览器系统通知；点击聚焦并切会话 | 系统通知不可作答 |
+## 3. 网页与桌面能力边界
 
-## 3. 设计结论（0.2.1）
+### 3.1 已查证的外部资料
 
-用户要求的逻辑接近 Codex Desktop：
+1. [Chrome：Document Picture-in-Picture](https://developer.chrome.com/docs/web-platform/document-picture-in-picture)：requestWindow 缺少用户手势会拒绝；窗口不能比来源页面存活更久，位置也不能由网页任意指定。它适合用户主动打开的辅助窗口，无法作为通用后台消息自动开窗的可靠基础。普通 window.open 也需单独验证拦截行为，不作为绕过限制的保证。
+2. [freedesktop Desktop Notifications Specification](https://specifications.freedesktop.org/notification/latest-single/)：Linux 桌面通知通过会话 D-Bus 服务；需能力探测，不可假设服务存在。动作与声音提示由通知服务器实现，不保证统一布局或任意输入 UI。因此可用于系统兜底，不替代 DSH 风格交互窗。
+3. [Microsoft：App notification features](https://learn.microsoft.com/en-us/windows/apps/develop/notifications/app-notifications/app-notifications-additional-features)：Windows 通知有独立的生命周期、声音等能力；应作为原生通知适配调查入口，尚未选定具体集成库，也未完成真实测试。
 
-- **只看是否聚焦当前会话**；
-- 聚焦 → 静默；
-- 不聚焦 → 优先交互弹窗；
-- 弹窗不可用 → Windows 提醒（只读）；
-- CLI/TUI 也能收到 Windows 提醒。
+工程判断：桌面进程通常可管理自己的窗口，避免网页的开窗手势限制；但 DSH 事件/作答桥接、配置、焦点和平台适配仍需开发。浏览器音频的 WAV 回退也不代表可绕过播放权限；桌面发声路径需独立验收。
 
-实现拆分：
+### 3.2 还没有证实的能力
 
-| 半区 | 职责 |
-|---|---|
-| Host | 观察 `session/event`（`approval/asked`、`tool/call(ask_user_question|exit_plan_mode)`、`turn/end`）；无活跃 Web presence 时用 PowerShell WinForms 原生小窗提醒（打开 DSH / 关闭）；提供 presence / windows-notify 路由 |
-| Client | 观察 `uiSession.sessionStatus` + `sessions.list`；上报 presence；聚焦当前会话时静默；弹窗打开时入队；弹窗关闭时调用宿主 Windows 兜底 |
-| Popup | Document PiP / 普通弹窗；极简卡片；审批/提问/计划/完成交互 |
+- DSH 桌面客户端是否提供可由本插件复用的窗口、通知、前台会话和主题接口。
+- 桌面组件是否能经官方支持接口在无 Web 页面时完成批准/提问回答；当前插件只持有 Web Pending 对象。不能把对象的 answer 方法直接序列化后跨进程调用。
+- `session/event` 的 tool/call 只能作为候选信号，不能证明每次工具调用都实际等待人工回答；新事件模型需对照真实生命周期验证，防止自动结束/计时提问误提醒。
+- CLI 前台会话识别、精准回终端、Linux Wayland 激活、游戏/全屏状态检测；需按目标环境实测。
 
-明确不做：
+优先调查已有桌面能力，再决定是否新增辅助程序。桌面组件若启动自绘 WebView，也必须通过明确的原生桥接管理窗口与应答，而不是仅把网页装进壳。
 
-- 页内通知卡片（用户要求删除）；
-- 浏览器 Notification 通道/权限（宿主 PowerShell 取代）；
-- 自动打开外部弹窗（浏览器限制）；
-- 自动批准/拒绝/回答（安全）；
-- Windows 兜底内作答（用户接受只读）。
+## 4. 复用与重做建议
 
-## 4. DSH API 结论（0.2.2-rc.1）
+保留候选：`src/audio/`、`src/engine/question-answer.js`、`src/ui/cards/`、i18n、主题 token 与纯函数测试。卡片目前直接依赖 runtime 和 Pending 对象，复用到独立窗口前需划分展示数据与命令接口。
 
-### 4.1 Web 状态源
+重做候选：宿主统一配置、事件身份、投递与确认、presence 聚合、平台窗口适配、回会话协议。先证实事件到真实桌面的最小闭环，避免再花时间打磨一个无法自动出现的 UI。
 
-- `ctx.uiSession.sessionStatus`：`{ getSnapshot(), subscribe(listener) }`，快照 `Map<SessionId, SessionStatus>`。
-- `SessionStatus`：`{ running, pendingInteraction, completionUnread }`。
-- `ctx.sessions.list`：`{ getSnapshot(), subscribe(listener) }`；`byId[id]` 提供 `displayTitle`、`origin`、`retainedBy.mainView`。
-- `PendingApproval.answer('allowed-once' | 'rejected')`。
-- `PendingQuestion.answer({ answers: [{ id, selected, custom? }] })`；`channel`、`countdown`、`holdFocus`/`releaseFocus`/`engage`/`takeTime`。
-- 计划审核：`questions[0].intent.kind === 'plan-review'`，`intent.approve` 指定批准选项，正文在 `question.detail`。
-- `ctx.uiWorkspace.openSession(sessionId)`。
+## 5. 历史调研的有效性
 
-### 4.2 宿主事件
+旧文档于 2026-11-07/08 列出 dsh-popup-notify、dsh-approval-popup、dsh-reminder、dsh-notifier、deepseek-harness-desktop 等候选，并给出“没有完全符合的活跃项目”的结论。本轮没有重新核实这些仓库的内容、许可证或活跃度；旧结论不能作为当前选型证据，详细旧表可从 Git 历史查阅。
 
-- `session/event` 是 post-commit 事件；seed/replay 不发布，避免恢复时轰炸。
-- `approval/asked`：`{ id, toolName, callId?, reason? }`。
-- `tool/call`：`{ callId, name, arguments }`；`ask_user_question` 的 `arguments` 含 `questions`；`exit_plan_mode` 表示计划审核。
-- `turn/end`：`{ turn, reason }`；`reason.kind` 可为 `completed` / `error` / `max-tokens` / `blocked` / `aborted`。
-- `session.header`：`id`、`cwd`、`origin`（`subagent`）；无 title，用 cwd basename/session id 标识。
+P0 调查已有桌面客户端或依赖时，应重新核实官方接口、维护状态、许可、安装体积与集成成本；只复用真正减少维护成本的能力，不因旧表或项目名称直接选型。
 
-### 4.3 宿主路由
+## 6. P0 实查结果与路线确认
 
-- `ctx.webServer.register({ kind: 'exact', path, handler })`；handler 拥有 `IncomingMessage/ServerResponse`。
-- `ctx.inject(['webServer'], (scope) => ...)` 让 Web 路由可选；CLI/TUI 无 webServer 时宿主仍可观察事件。
+用户已选择继续用浏览器、接受配套桌面辅助程序。以下桌面项目供参考，不要求用户换客户端。
 
-### 4.4 浏览器能力
+### 桌面通知能力
 
-- `react`、`react/jsx-runtime`、`react-dom`、`react-dom/client` 在 `dsh-web-frontend` 的 static modules 中。
-- Document PiP：`window.documentPictureInPicture.requestWindow({ width, height })`；需要用户手势；Chromium。
-- `window.open` 回退可能被拦截。
-- 浏览器 Notification 已不使用；Windows 兜底由宿主 PowerShell 负责。
+核查上游提交 `09f9343b98c522df8a5788284169810a24042948`（2026-11-09 读取），[项目元数据](https://github.com/dsh-tauri/deepseek-harness-desktop)为 MIT、非归档。检查的是源码，不是运行验证：
 
-### 4.5 Windows 兜底
+- [native.ts](https://github.com/dsh-tauri/deepseek-harness-desktop/blob/09f9343b98c522df8a5788284169810a24042948/packages/builtin-plugin-notification/src/client/service/native.ts)：通过 `dsh-tauri/client` invoke 调用通知权限、动作注册和 notify；回调校验 origin、deliveryKey、sessionId。可参考事件身份设计。
+- [notify.ts](https://github.com/dsh-tauri/deepseek-harness-desktop/blob/09f9343b98c522df8a5788284169810a24042948/packages/builtin-plugin-notification/src/client/register/notify.ts)：观察客户端状态，动作再调用当前 Pending；通过 adapter.openSession 定位会话。提问通知以自由文本回复，多题攒齐再提交；不是完整选项弹窗。
+- [tauri.ts](https://github.com/dsh-tauri/deepseek-harness-desktop/blob/09f9343b98c522df8a5788284169810a24042948/packages/builtin-plugin-tauri/src/client/service/tauri.ts)：原生能力有专用可用性标志，事件按窗口限定；浏览器下 listen 退为 noop。因此不能直接把这个插件装进普通浏览器就获得桌面能力。
 
-- WSL：`/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe`。
-- Windows：`powershell.exe`。
-- PowerShell WinForms 小窗：右下角置顶、标题/正文、打开 DSH/关闭按钮、5 分钟自动关闭；独立进程，不阻塞宿主。当前只提醒，可在第二阶段扩展为原生选择/输入。
-- `[System.Media.SystemSounds]::Asterisk.Play()` 提供系统提示音。
+未确认上游提供可供普通浏览器远程调用的任意交互窗口 API；不能把 Tauri SDK 的存在当作该能力已开放。
 
-## 5. 开发前检查点
+### 应答边界
 
-若未来出现一个同时满足第 1 节全部要求、且活跃维护的 MIT 项目，应优先评估“安装而非重写”。当前没有。
+本地 `@deepseek-ai/dsh-user-questions/lib/types/index.d.ts` 与 `lib/typert.remote-client.d.ts` 有 `userQuestions/answer`，但契约明确只回答 continued 问题，接受后以有来源的用户消息进入原生流程。不适用于统一回答所有等待中的审批和提问，也不能为规避“不写 session log”自行伪造该消息。辅助程序首个交互原型仍应桥接活跃 Web 的 Pending 对象，不监听新的 waterfall。
+
+### 已复现缺陷与修复
+
+隔离调用真实 createEngine，Web 隐藏、审批到达、sound.enabled=false 时，修复前收到一个 Windows fallback，silent=false；同类问题覆盖完成提醒。引擎原来仅根据“Web 是否播成功”决定系统静音，混淆了“禁止声音”和“播放失败”。现已让全局/场景静音、none、零音量都请求 silent=true，Web 已播成功也不重复响；仅允许声音而 Web 播放失败时保留系统声音。12 项回归覆盖审批与完成的六种组合。
+
+边界：未改 Windows 手动测试按钮的演示行为；无 Web 时宿主仍未共享配置，仍是 P2 缺口。
+
+### 环境可观测性
+
+当前 WSL 可执行 Windows PowerShell，版本 `5.1.26100.9711`，退出码 0；未显示真实窗口。检查本机 Linux 进程/监听端口未发现 DSH launcher，已识别的 Node 监听者为 VS Code。无法从这些事实推出 Windows 侧没有 DSH，也不能据此检查用户故障页面。当前运行位置、访问地址和 Linux 桌面目标已询问，尚待补充。

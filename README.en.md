@@ -1,160 +1,51 @@
 # dsh-notify-interactive
 
-> Reminders for DeepSeek Harness when a task needs you. Stay silent while you are focused on the current conversation; otherwise raise a small Windows popup with the actual content. Open the optional DSH-styled interactive popup only when you want to answer in the window. CLI/TUI uses the same Windows popup.
+DSH reminders for approvals, questions, plan reviews, and turn completion. The target experience is automatic DSH-styled interactive popups, independent sound and popup controls, silence while attending the relevant conversation, and Windows/Linux support.
 
-[中文](README.md) · [Requirements](docs/requirements.md) · [Research](docs/research.md) · [Verification](docs/verification.md)
+[中文](README.md) · [Requirements and plan](docs/requirements.md) · [Investigation](docs/research.md) · [Verification](docs/verification.md)
 
-## What it does
+## Current status
 
-Only interrupts when a human is needed:
+Code version: `0.2.1`; target DSH: `0.2.2-rc.1`. As of 2026-11-09, the project is being replanned. P0 investigation has begun, with a fix for Web fallback sound leakage. The target behavior is not fully implemented or accepted.
 
-- tool approval (escalation, writes, commands);
-- agent question / plan review;
-- turn completion.
+The existing Web UI includes approval/question/plan/completion cards, answer construction, five audible sound presets plus silence, volume, and preview. Interactive windows require a manual opening, close when empty, and do not automatically reopen for subsequent events.
 
-One rule: **while you are focused on the current conversation, nothing happens.** Otherwise:
+When no interactive window is open, the Web client requests a PowerShell WinForms reminder from the host. Without active Web presence the host attempts it directly. This supports Windows/WSL paths only; there is no native Linux desktop fallback. Real desktop delivery and answer flows remain unverified, and the user has reported popup failures.
 
-1. by default the host raises a small Windows popup with the actual content (reminder-only);
-2. open the DSH-styled interactive popup only when you want to answer; it opens on demand and closes after handling;
-3. no Web UI (CLI/TUI) → the same Windows popup.
+Settings currently live in browser localStorage (`dsh.notify-interactive.settings.v2`). There is no popup master switch, per-event settings UI, or per-event sound selection. The host does not share browser settings when the Web client is absent. The Windows open action currently opens a site URL, without guaranteed session selection.
 
-## Features
+## Direction
 
-| Capability | Detail |
-|---|---|
-| Events | Approval, question, plan review, turn completion |
-| Silence rule | Focused on the current conversation → no reminder |
-| Web popup | Optional, on demand; Document Picture-in-Picture (always on top), auto-closes after handling |
-| In-popup actions | Allow/reject; select/custom/skip questions; approve/decline plan; back to conversation |
-| CLI/TUI fallback | Host observes session events and shows a PowerShell Windows popup |
-| Closed-tab fallback | Web client reports presence; the host takes over after the page is gone |
-| Sound | Optional Web Audio; the Windows fallback plays the system sound |
-| Minimal UI | Title, necessary context, session entry, and actions only; no outer popup header or extra close buttons |
-| Privacy | No session-log writes, no model tools, no auto-answer, no uploads |
+First diagnose delivery failures and investigate reusable DSH desktop capabilities. Then compare a plugin with system notifications against a plugin with a desktop companion. A companion can manage windows outside browser popup restrictions, but adds installation, communication, packaging, and upgrade work. The user chose browser DSH with a desktop companion; its toolkit and integration remain to be validated.
 
-## Status
+The authoritative plan and acceptance criteria are in the linked Chinese documents. No automatic answers, session-log writes, model-tool registration, prompt injection, or approval-waterfall interception. System fallback remains reminder-only; answers require explicit human action.
 
-- Version `0.2.1` (phase 1 redesign)
-- DSH `0.2.2-rc.1` line, Web / CLI / TUI profiles
-- Removed: in-page cards, browser Notification channel, notification permission, popup toggle, behavior clutter
+## Install the current implementation
 
-## Install
+These commands install the existing limited implementation, not the planned redesign:
 
 ```sh
 dsh plugin --profile web add https://github.com/wuqiuwangtian/dsh-notify-interactive
 ```
 
-or install the release tarball:
+Or use the existing package:
 
 ```sh
 dsh plugin --profile web add ./dsh-notify-interactive-0.2.1.tgz
 ```
 
-The same package works in CLI/TUI profiles; the host half takes over when no Web UI is present.
+Install into the corresponding CLI/TUI profile if needed; current fallback only attempts Windows reminders. Refresh the Web page after installation; host changes require a DSH restart. Within DSH, prefer `plugin_manager install_bundle` with the absolute repository path.
 
-Refresh the DSH page after installing. The interactive popup is not required; CLI/TUI needs no window.
-
-> Upgrading from 0.1.x to 0.2.x adds the host Windows fallback and presence routes, so restart the DSH process once; later updates only need a page refresh.
-
-## First run
-
-1. Refresh DSH.
-2. Nothing needs to be open by default: every message raises a small Windows popup with the actual content (reminder-only). Use **Test Windows reminder** to verify.
-3. Open the optional interactive popup only when you want to answer in the window; it is available only while a card exists and closes after handling.
-4. The test approval/question/completion cards show interactive cards while the popup is open; with it closed they raise a Windows demo popup.
-
-## Rules
-
-| Situation | Behavior |
-|---|---|
-| Focused on the current conversation | No reminder |
-| Web page in front, another conversation | Windows popup with content; if the optional popup is already open, the card appears there |
-| Web page unfocused/hidden | Windows popup with content; if the optional popup is already open, the card appears there |
-| Web page closed / CLI / TUI | Host Windows popup |
-
-- The Web interactive popup **cannot be opened by a background event** (browser restriction); open it manually when a card exists.
-- It has no empty state: it closes automatically when there is nothing to show.
-- The Windows fallback is **reminder-only**; it cannot approve, reject, or answer.
-- Sound is optional; the Windows fallback plays the system sound.
-- The current conversation is handled by DSH's own UI; the plugin stays silent.
-
-## Settings
-
-| Setting | Default | Meaning |
-|---|---|---|
-| Enable notifications | on | Master switch |
-| Play a sound | on | Web sound |
-| Sound | chime | Six local presets, including silent |
-| Volume | 70% | 0–100% |
-| Open/close popup | — | Available only while a card exists; closes after handling |
-| Test popup | — | Add a demo card and open the popup |
-| Test Windows reminder | — | Call the host Windows fallback |
-| Test cards | — | Local demos; never answer a real request |
-| Reset preferences | — | Reset settings without removing the plugin |
-
-Settings live in `localStorage` under `dsh.notify-interactive.settings.v2`.
-
-## How it works
-
-```text
-Host (loaded in Web, CLI, and TUI)
-  session/event:
-    approval/asked · tool/call(ask_user_question|exit_plan_mode) · turn/end
-        ├─ active web presence → do nothing (the web client owns delivery)
-        └─ no web presence → PowerShell Windows popup (reminder only)
-
-Web client
-  presence every 5s + focus/visibility/session changes → POST /dsh-notify-interactive/presence
-  uiSession.sessionStatus + sessions.list
-        ├─ focused current conversation → silent
-        └─ otherwise:
-             the card is stored locally
-             popup closed → POST /dsh-notify-interactive/windows-notify
-             popup open → render the card; close when empty
-```
-
-- No `shell.overlay`; no in-page notifications.
-- The host does not listen to the approval/question waterfall; it only observes committed session events.
-- The Windows fallback is a native WinForms window: title/body arrive via base64 + UTF-16 command, it is topmost at the bottom-right, has **Open DSH / Close** buttons, auto-closes after 5 minutes, and does not block the host.
-
-## Can a native Windows popup accept input/selection?
-
-- The fallback is now a **native WinForms window** with title, body, **Open DSH** and **Close** buttons; clicks respond and it can open DSH.
-- It is currently **reminder + open DSH** only; it has no radio/checkbox/text input yet. WinForms/WPF can do that: add controls and return the result. A native answerable popup can be a phase 2 feature. The tradeoff is a separate native UI that cannot match DSH exactly, and the host would need to own the answer chain.
-- The old blank `WScript.Shell.Popup` window has been removed.
-- The DSH-styled Web popup remains an optional answerable surface: open it on demand only while a card exists; it closes after handling.
-
-## Limitations
-
-| Limit | Detail |
-|---|---|
-| Interactive popup is optional | Open it once only when you want in-window answers; without it, every message uses the Windows popup |
-| Windows fallback is read-only | Cannot approve/reject/answer; return to DSH or the terminal |
-| Platform | Windows or WSL (PowerShell path detection); no Windows fallback elsewhere |
-| No GUI | Without a desktop, Windows popups cannot display either |
-| Multiple tabs | Each tab runs independently; phase 2 leader election |
-| Presence delay | Up to 15s takeover after a crash without `pagehide` |
-| Completion reason | Host Windows text distinguishes reasons; the Web card uses “turn finished” |
-| Settings sync | Per-browser localStorage |
-
-## Prior art
-
-No active project matched the full requirement set. See [docs/research.md](docs/research.md):
-
-- `dsh-popup-notify` — topmost but non-interactive;
-- `dsh-approval-popup` — approval only;
-- `dsh-reminder` — click-to-return, no in-popup answers;
-- `dsh-notifier` — phone-side answers, not a DSH-styled desktop popup;
-- `deepseek-harness-desktop` — a full desktop app, not a web plugin.
-
-## Development
+## Development and verification
 
 ```sh
 pnpm install
-pnpm verify   # build + node --check + node --test + render smoke
+pnpm verify
 ```
 
-`lib/client.js` is committed and generated from `src/`; do not edit it by hand. CI verifies the artifact is current.
+`src/client/` owns Web state/presence, `src/host/` observes host events and attempts Windows delivery, `src/ui/` contains cards/settings, and `src/audio/` contains sound generation. Build and commit `lib/client.js` with source changes.
+
+The latest pnpm verify passed build, syntax checks, 58 tests, and render smoke. No installation, release, or real desktop end-to-end validation was performed. Passing mocks/rendering does not establish reliable desktop delivery. See the verification document for diagnostic steps and the new acceptance matrix.
 
 ## License
 

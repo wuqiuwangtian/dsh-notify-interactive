@@ -1,112 +1,101 @@
-# 验证记录
+# 验证证据与目标验收
 
-更新日期：2026-11-08。环境：DSH `0.2.2-rc.1`，`web` profile，WSL2，Windows 侧 Edge。
+更新：2026-11-09。需求与阶段状态见 [requirements.md](requirements.md)，原因分析见 [research.md](research.md)。
 
-## 1. 自动化验证
+## 1. 上轮文档审阅验证（保留记录）
 
-| 检查 | 命令 | 结果 |
+代码版本 `0.2.1`；本轮只改文档。工作区初始干净，审阅起点 `f321d92`。本地 DSH 安装包 `0.2.2-rc.1`。
+
+| 命令/动作 | 本轮结果 | 能证明什么 |
 |---|---|---|
-| 构建 | `pnpm build` | 通过；`lib/client.js` 约 112 KB，`lib/index.js` 为宿主半区 |
-| 语法 | `pnpm check` | 通过 |
-| 单元测试 | `pnpm test` | **46 passed / 0 failed** |
-| 渲染冒烟 | `pnpm render-smoke` | 通过；Settings 4860B、PopupApp 3556B；断言无外层标题/无额外关闭按钮 |
-| 宿主 apply 冒烟 | 临时 Node mock `ctx.inject` / `webServer` / `session/event` | 通过；presence 与 windows-notify 路由注册；presence active 时 turn/end 不触发 Windows |
-| PowerShell 负载 | 临时 `powershell.exe -EncodedCommand` 解码 base64 JSON、构建 WinForms 窗口并输出 | 通过；中文标题/正文完整、宽度 360、两个按钮（不使用 WSL 环境变量转发） |
-| 静态禁入包 | `grep dsh-client-ui-primitives lib/client.js` | 无匹配 |
-| 产物同步 | `pnpm build && git diff --exit-code`（CI） | 待首次提交后验证 |
+| `pnpm test` | 46 passed / 0 failed | 当前纯逻辑及 mock 测试通过 |
+| `pnpm render-smoke` | 通过；Settings 4860B、PopupApp 3556B | 服务端渲染无相关 JSX/组件错误；不是真实窗口验证 |
+| `pnpm check` | 通过 | 当前 lib 语法有效；未重建，不能据此证明产物同步 |
+| 静态链路与 DSH Pending 类型检查 | 完成 | 见 research；不是安装后真实交互证据 |
 
-测试覆盖：
+渲染冒烟出现 Node `ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.`；命令仍成功，不能将测试环境存储替代浏览器验收。
 
-- `tests/settings.test.mjs`：v2 默认值、非法值修复、部分合并、localStorage、损坏 JSON、写入失败。
-- `tests/engine.test.mjs`：diff 基线/交互/完成/移除；聚焦当前会话静默；其他会话通知；弹窗打开入队；弹窗关闭走 Windows 兜底；子会话跳过；禁用清空；reset。
-- `tests/questions.test.mjs`：单选/多选/自定义/跳过答案构造；校验；计划审核解析。
-- `tests/sounds.test.mjs`：预设、音量、Web Audio、WAV 兜底、试听路径。
-- `tests/host-logic.test.mjs`：presence 策略、session label、approval/question/plan/completion 文案、subagent/aborted 跳过、base64 PowerShell 负载。
-- `tests/host-apply.test.mjs`：宿主路由注册（presence / windows-notify）与 presence 204。
-- `tests/surface.test.mjs`：popup/no-popup 标志。
-- `tests/i18n.test.mjs`：中英文映射与占位符。
-- `tests/render-entry.jsx`：Settings / PopupApp + 审批/提问/完成/计划演示卡的服务端渲染。
+本轮没有运行 build、没有修改 src/lib/package.json、没有安装/重启/发布，也没有运行真实桌面流程。文档检查使用 `git diff --check` 与本地 Markdown 链接检查。
 
-## 2. 安装验证
+## 2. 历史证据（不能当作本轮验收）
 
-- `plugin_manager install_bundle` target `/home/wqwt/code/dsh-notify-interactive`：
-  - `application: applied`；`warnings: []`
-  - profile 依赖 `dsh-notify-interactive: link:/home/wqwt/code/dsh-notify-interactive`
-- Client 只注册 `settings.section`（id `notify-interactive`）；**不再注册 `shell.overlay`**。刷新页面后旧 overlay 项应消失。
-- 页面需要刷新以加载新的 client bundle；宿主半区（Windows 兜底/presence 路由）是新增的，升级到 0.2.x 需要重启一次 DSH 进程。
-- GitHub：<https://github.com/wuqiuwangtian/dsh-notify-interactive>
-- Release：<https://github.com/wuqiuwangtian/dsh-notify-interactive/releases/tag/v0.2.1>
+2026-11-08 旧记录报告：WSL2 + Windows Edge、DSH web profile；构建/语法/46 单测/渲染通过；插件 install_bundle applied；曾执行 PowerShell 负载解码及窗口构造冒烟。历史安装记录与远端 Release 信息本轮未重新核实。
 
-## 3. 用户手工验收清单
+当时视觉、Document PiP 真实行为、实际审批/提问、Windows 窗口显示和 CLI/TUI 端到端没有完整验收。用户本轮明确报告效果不满意且弹窗失效，因此旧“第一阶段重构完成”不代表基础目标完成。
 
-> 本环境没有浏览器/桌面控制接口；视觉、真实审批/提问、WinForms 原生小窗、CLI/TUI 端到端由用户执行。
+旧手工步骤要求预开空窗口，但代码现在无卡片不能从设置打开、空队列自动关窗；这些步骤已失效。下文以目标行为重建验收，未实现项不得标通过。
 
-### 3.1 设置与弹窗
+## 3. P0：定位现有故障
 
-1. 硬刷新 DSH 页面。
-2. 设置 → 互动提醒：确认总开关、音效、弹窗打开/测试、Windows 提醒测试、三类测试卡、恢复默认。
-3. 点“打开弹窗”，确认外部小窗显示“提醒”标题和空状态。
-4. 点测试审批/提问/完成卡：卡片应只出现在外部弹窗；页内不应出现任何通知卡片。
-5. 点“测试 Windows 提醒”：Windows/WSL 应弹出 WinForms 原生小窗（标题/正文/“打开 DSH”/“关闭”，5 分钟自动关闭）；点“打开 DSH”应打开浏览器，点“关闭”应关闭窗口。
+前提：在用户实际失败的 DSH profile、浏览器、桌面环境复现；记录插件版本与宿主是否已重启，区分 Windows 原生、WSL→Windows、Linux 原生桌面。
 
-### 3.2 聚焦当前会话
+1. 设置 → 互动提醒 → 测试 Windows 提醒：判断现有宿主路由及 PowerShell 路径是否可用。测试只证明演示链路，不能替代真实事件。
+2. 测试弹窗：当前版本会添加演示审批卡并手动开窗；记录 backend/error。完成、关闭后确认下次真实事件不会主动开 Web 窗口这一现状。
+3. 在另一个前台应用中触发真实审批、提问、完成，逐段记录：宿主是否收到事件、是否因 presence 被抑制、Web 是否识别事件、windows-notify HTTP 状态/body、PowerShell 子进程是否运行成功、真实窗口是否出现。
+4. Web 诊断入口为 `globalThis.__dshNotifyInteractive`，可读 popupController / settingsStore / notificationStore 状态。不要调用真实 Pending.answer 做无人批准测试。
+5. 关闭 Web 页面后重复触发，比较宿主接管与设置行为；Linux 无 PowerShell 时记录“不支持”，不能记成静默成功。
 
-1. 聚焦 DSH 当前会话。
-2. 触发审批或提问（或等待完成）。
-3. 预期：插件不播放音效、不弹外部卡片、不弹 Windows；由 DSH 自带 UI 处理。
+预期交付：明确事件在哪一段中断，区分确定原因与待验证假设。日志不写 session log，不保存答案或完整敏感命令。真实审批由用户显式处理。
 
-### 3.3 其他会话 / 页面失焦，弹窗已打开
+## 4. 新路径的验收矩阵（全部待实施、待验证）
 
-1. 保持交互弹窗打开。
-2. 切到其他会话或切到别的窗口。
-3. 触发审批/提问/完成。
-4. 预期：只有交互弹窗出现卡片；不弹 Windows。
+### 4.1 环境
 
-### 3.4 弹窗关闭
-
-1. 关闭交互弹窗。
-2. 切到别的窗口/会话，触发审批/提问/完成。
-3. 预期：宿主弹带内容的 Windows 小窗（只读）；卡片仍保存在本地，回到 DSH 后可在设置里“打开弹窗”查看并作答，处理完弹窗自动关闭。
-
-### 3.5 CLI/TUI
-
-1. 在 CLI/TUI profile 安装同一包。
-2. 触发审批/提问/完成。
-3. 预期：宿主直接弹 Windows 提醒；无 Web 交互弹窗。
-
-### 3.6 语言
-
-切换 DSH 语言到中文/英文，设置页与弹窗文案跟随；`zh` / `zh-CN` / `zh-TW` → 中文，其他 → 英文。
-
-## 4. 未验证 / 限制
-
-| 项 | 原因 | 影响 |
+| 环境 | 首轮覆盖 | 状态 |
 |---|---|---|
-| 交互弹窗视觉 | 无浏览器自动化 | 由用户确认 |
-| Document PiP 实际置顶 | 依赖 Edge/Chrome 与用户点击 | 由用户确认 |
-| WinForms 原生小窗 | 需桌面环境；会弹真实窗口 | 由用户确认 |
-| CLI/TUI 端到端 | 需要另一个 profile/终端 | 由用户确认 |
-| presence 路由实际注册 | 需刷新后的 Web 页面 | 安装后检查 |
-| 多标签页去重 | 第一阶段未实现 | 文档说明 |
-| 完成原因 Web 细分 | 第一阶段未实现 | Web 卡统一“本轮已结束” |
+| Windows 原生 DSH + Web | 自动弹窗、音效、焦点、交互、回会话 | 待验证 |
+| WSL DSH → Windows 桌面 + Web | 同上，附加通信、地址映射和进程恢复 | 待验证 |
+| Linux 原生桌面 + Web | 同上；先确认发行版/桌面及 X11/Wayland，记录实际覆盖 | 环境待定 |
+| Windows / Linux 桌面 + CLI/TUI | 无 Web 时系统通知；声音独立；前台识别/激活明确能力边界 | 待验证 |
+| Headless / SSH | 不承诺本机可见弹窗；报告缺桌面能力 | 不在首轮默认覆盖内 |
 
-## 5. 复现命令
+只通过 WSL 不等于通过 Linux 桌面；只通过一个 Wayland/X11 桌面不等于全部 Linux 桌面兼容。
+
+### 4.2 基础行为
+
+每个目标桌面、每类真实事件，依次执行：
+
+1. 冷启动，不提前打开通知窗口；切至其他应用，触发事件。预期按配置自动提醒，出现时不抢键盘焦点，无空白常驻窗。
+2. 聚焦事件所属会话，再触发。预期无插件弹窗、无插件声音、无系统兜底。
+3. 聚焦另一个会话、隐藏页面、最小化页面、关闭页面分别触发。预期不因“Web 在线”误判为已关注；无 Web 时至少经配置允许的系统兜底提醒。
+4. 依次验证弹窗/音效四组合：开/开、开/关、关/开、关/关。预期仅对应通道动作，音效关闭时无系统漏音；总开关关闭后全部静默。
+5. 对审批/提问/计划/完成分别关闭通道、选择音效，重启及关掉 Web 后重复。预期配置持久且宿主一致。
+6. 多标签、多窗口、两个 DSH 实例触发不同请求。预期同一事件不重复，不同请求不因冷却误吞，跨实例不串会话。
+7. 关闭一轮提醒后触发下一轮。预期仍自动提醒，无需再次点“打开弹窗”。
+
+### 4.3 交互与返回
+
+- 审批：用户点击允许一次/拒绝后真实 DSH 恢复；关闭弹窗不等于提交。
+- 提问：单选、多选、自定义、多题、按规则允许的跳过、中文输入法 Enter、计时题逐项验证；处理过程中不自动关闭或抢输入。
+- 计划审核：正确展示、批准/拒绝；缺失批准选项不提交猜测答案。
+- 在原会话先处理，再点击旧卡；或两界面同时作答。预期过期失效、避免重复提交；断线失败有提示，重连不自动提交。
+- 点击回会话：分别验证页面已开/已关，准确定位对应实例与会话。只打开首页不通过。CLI 激活若不支持需如实标出。
+- Web 断开后独立交互是单独能力；未打通正式应答接口前必须降级为提醒，不能展示无效的可提交按钮。
+
+### 4.4 平台、故障与后续场景
+
+- 浅/深主题、语言、缩放、多显示器；窗口不离屏，卡片符合 DSH token，必要信息无截断导致无法判断。
+- 关闭/杀掉桌面组件、断开通信、HTTP 失败、浏览器冻结、系统通知服务缺失：有可理解的失败状态，按策略降级，不无限重试、不重复响铃。
+- 系统禁止通知时，区分“API 已接受”和“实际可见”，不能承诺一定显示。
+- P5 手动勿扰、游戏/全屏视频及恢复：自绘与系统兜底一致抑制；声音按独立规则；恢复后不轰炸过期通知。
+
+## 5. 实现阶段自动检查
 
 ```sh
-cd /home/wqwt/code/dsh-notify-interactive
 pnpm install
 pnpm verify
 ```
 
-安装：
+构建会更新 `lib/client.js`，实现提交需同步产物。新增检查重点为事件级去重、共享设置、通道独立、投递失败恢复、失效请求与多客户端协调；桌面与真实应答仍需本节手工验收，不能只增加 mock 后宣称完成。
 
-```text
-plugin_manager action=install_bundle target=/home/wqwt/code/dsh-notify-interactive
-```
+安装仍按项目 AGENTS.md 的 install_bundle 流程；执行安装/重启等动作应在后续实现与验证范围内，本轮未执行。
 
-检查 slot：
+## 6. P0 本轮实现与验证
 
-```text
-cordis_inspect_query platform=client provider=Slots method=listSubTree input={"root":"settings.section"}
-cordis_inspect_query platform=client provider=Slots method=listSubTree input={"root":"shell.overlay"}
-```
+- 修复：Web 引擎投递 Windows 兜底时遵循静音设置，源码 `src/engine/engine.js` 与 `lib/client.js` 同步。无 Web 宿主设置共享尚未实现。
+- 复现：真实引擎在 sound.enabled=false 时原先传 silent=false，修复后回归断言 silent=true；审批、完成各覆盖全局静音、事件静音、none、零音量、Web 成功/失败，共 12 项。
+- `pnpm verify`：构建、语法、58 项测试、渲染冒烟通过；仍有原有 localStorage ExperimentalWarning。
+- PowerShell 仅查询版本成功，未弹真实窗口；用户的故障页面和 Linux 桌面端到端未验证。
+- 桌面上游固定提交源码核查完成，详见 research 第 6 节；不是兼容性验收。
+
+用户验证此修复：加载新的 client bundle（安装包指向本仓库时刷新页面），关闭音效并保持通知窗口关闭；切到其他应用，触发真实审批或完成。预期现有 Windows 兜底仍可显示，但不请求系统提示音。前提是该机器原来的 Windows 兜底能正常投递；如果仍不显示，按第 3 节检查投递链路，不能认为静音补丁修好了弹窗。测试 Windows 按钮是演示路径，不能替代此验收。
