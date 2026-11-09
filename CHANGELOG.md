@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- 新增 Arch WSL → Windows Electron 完成提醒原型：按需窗口、主题 token 快照、独立音频、渲染确认与进程恢复；通过 `DSH_NOTIFY_COMPANION=1` 显式启用。
+- 新增独立安装/桌面冒烟脚本；窗口运行于 Windows LocalAppData，采用连接隔离文件邮箱。
+- 新增插件自有会话返回参数；真实 DSH 会话定位仍待验收。
+- 修复 Web 静音配置在 Windows 兜底中漏音。原型未实现审批/提问桌面交互、统一设置或 Linux 原生桌面支持。
+
 ## 0.2.1 — 2026-11-08
 
 ### Changed

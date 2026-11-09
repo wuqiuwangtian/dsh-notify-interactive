@@ -16,9 +16,22 @@ Settings currently live in browser localStorage (`dsh.notify-interactive.setting
 
 ## Direction
 
-First diagnose delivery failures and investigate reusable DSH desktop capabilities. Then compare a plugin with system notifications against a plugin with a desktop companion. A companion can manage windows outside browser popup restrictions, but adds installation, communication, packaging, and upgrade work. The user chose browser DSH with a desktop companion; its toolkit and integration remain to be validated.
+First diagnose delivery failures and investigate reusable DSH desktop capabilities. Then compare a plugin with system notifications against a plugin with a desktop companion. A companion can manage windows outside browser popup restrictions, but adds installation, communication, packaging, and upgrade work. The user chose browser DSH with a desktop companion; an optional Electron completion-only prototype now exists; full integration is pending.
 
 The authoritative plan and acceptance criteria are in the linked Chinese documents. No automatic answers, session-log writes, model-tool registration, prompt injection, or approval-waterfall interception. System fallback remains reminder-only; answers require explicit human action.
+
+## Optional completion prototype (Arch WSL to Windows)
+
+The current focus is Web UI. TUI and DSH Desktop are outside this iteration. The installer needs Node.js >=22.12; the Windows Electron runtime is about 357 MiB, plus the WSL download copy.
+
+```sh
+pnpm companion:install
+pnpm companion:smoke
+# Stop the previous DSH host after its active work finishes, then start:
+DSH_NOTIFY_COMPANION=1 dsh --profile web --no-open
+```
+
+Refresh the authenticated browser page, keep the old interactive popup closed, and try the completion demo. The companion uses a connection-scoped file mailbox in Windows LocalAppData, with no extra listening port or autostart registration. Remove the environment flag and restart to revert. Approvals/questions still use the previous path. See verification section 7 for limitations and acceptance steps.
 
 ## Install the current implementation
 
@@ -45,7 +58,7 @@ pnpm verify
 
 `src/client/` owns Web state/presence, `src/host/` observes host events and attempts Windows delivery, `src/ui/` contains cards/settings, and `src/audio/` contains sound generation. Build and commit `lib/client.js` with source changes.
 
-The latest pnpm verify passed build, syntax checks, 58 tests, and render smoke. No installation, release, or real desktop end-to-end validation was performed. Passing mocks/rendering does not establish reliable desktop delivery. See the verification document for diagnostic steps and the new acceptance matrix.
+The latest pnpm verify passed build, syntax checks, 64 tests, and render smoke. Windows desktop visibility, audio start, restart recovery, and the built host route have passed smoke validation. Real DSH session delivery and return navigation remain unverified; no release was published. Passing mocks/rendering does not establish reliable desktop delivery. See the verification document for diagnostic steps and the new acceptance matrix.
 
 ## License
 

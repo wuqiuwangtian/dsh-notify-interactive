@@ -8,7 +8,7 @@
 
 2026-11-09：已授权开始 P0 调查与开发。0.2.1 仍是受限实现，尚未完成基础体验；不要将旧“第一阶段完成”当成验收结论。有效目标、待定方案和 P0–P5 计划见 `docs/requirements.md`；现状证据见 `docs/research.md`。
 
-当前代码仅支持手动打开 Web 交互窗与 Windows/WSL WinForms 兜底，无 Linux 桌面适配；用户已确认继续使用浏览器并接受桌面辅助程序；不要求换客户端。Linux 桌面目标与现场地址待补充，先验证关键能力再铺开实现。
+当前代码仅支持手动打开 Web 交互窗与 Windows/WSL WinForms 兜底，无 Linux 桌面适配；用户已确认继续使用浏览器并接受桌面辅助程序；不要求换客户端。本轮重点为 Arch WSL DSH Web → Windows；TUI 与 DSH Desktop 不扩展。Linux 原生桌面后续验收。完成提醒 Electron 原型需 `DSH_NOTIFY_COMPANION=1` 显式启用，尚非完整新方案。
 
 ## 关键约束
 
@@ -28,6 +28,8 @@
 - `src/ui/`：设置页 + 极简弹窗卡片。
 - `src/state/`：设置、通知队列、弹窗控制器、surface 标志。
 - `src/audio/`：Web Audio 合成 + WAV 兜底。
+- `companion/`：完成提醒 Electron 原型；由 `src/host/companion.js` 使用连接隔离文件邮箱管理，不开放额外端口。
+- `pnpm companion:install` 在 WSL 下载并复制 Windows 运行时至 LocalAppData（需要 Node >=22.12）；不要提交二进制或 `.runtime.json`。改窗口文件后需重新 staging，详见 verification。
 
 ## 构建与验证
 
@@ -36,7 +38,7 @@ pnpm install
 pnpm verify      # build + node --check + node --test + render smoke
 ```
 
-- 开发依赖只有 `esbuild` + React/ReactDOM（仅渲染冒烟用）。
+- 根开发依赖为 `esbuild` + React/ReactDOM；独立 `companion/package.json` 固定 Electron 开发依赖，仅显式运行安装器时下载。
 - `pnpm-workspace.yaml` 的 `allowBuilds.esbuild: true` 是 pnpm 12 运行 esbuild 安装脚本所必需。
 - 测试覆盖：设置、diff/引擎、提问答案、音效/WAV、host 文案与 presence 策略、surface 标志、i18n。
 - `tests/render-entry.jsx` 用 `react-dom/server` 渲染设置页和弹窗卡片；用于捕获 JSX/hook/undefined 组件错误。

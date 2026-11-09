@@ -1,5 +1,6 @@
 import { createElement } from 'react'
 import { runtime } from './runtime.js'
+import { snapshotTheme } from '../ui/theme.js'
 import { translate as translateKey } from '../i18n/dict.js'
 import { createSettingsStore } from '../state/settings.js'
 import { createNotificationStore } from '../state/notifications.js'
@@ -96,6 +97,9 @@ export function apply(ctx) {
         title: payload?.title,
         body: payload?.body,
         silent: payload?.silent === true,
+        theme: snapshotTheme(),
+        openLabel: translate('card.openSession'),
+        sound: settingsStore.getSnapshot().sound,
         url: (() => {
           try {
             return globalThis.location?.origin ?? ''
@@ -104,12 +108,18 @@ export function apply(ctx) {
           }
         })(),
       })
-      globalThis.fetch?.('/dsh-notify-interactive/windows-notify', {
+      return globalThis.fetch?.('/dsh-notify-interactive/windows-notify', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body,
         keepalive: true,
-      })?.catch?.(() => {})
+      })?.then?.(async response => {
+        const result = await response.json()
+        if (!response.ok || result.shown !== true) {
+          console.warn('[dsh-notify-interactive] delivery not confirmed:', result.delivery ?? 'failed')
+        }
+        return result
+      })?.catch?.(() => ({ shown: false, delivery: 'network-error' }))
     } catch {
       // A missing host route or fetch failure leaves the sound-only path.
     }
@@ -158,6 +168,28 @@ export function apply(ctx) {
   }
   runtime.ready = true
   runtime.version = '0.2.1'
+  ctx.effect(() => {
+    const url = new URL(globalThis.location.href)
+    const requestedSession = url.searchParams.get('dsh-notify-session')
+    if (!requestedSession) return
+    let attempts = 0
+    const timer = setInterval(() => {
+      attempts += 1
+      try {
+        const workspace = ctx.get('uiWorkspace')
+        const list = ctx.get('sessions')?.list?.getSnapshot?.()
+        if (workspace && list?.byId?.[requestedSession]) {
+          workspace.openSession(requestedSession)
+          url.searchParams.delete('dsh-notify-session')
+          globalThis.history.replaceState(null, '', url)
+          clearInterval(timer)
+        }
+      } catch { /* Retry while the initial session list is loading. */ }
+      if (attempts >= 40) clearInterval(timer)
+    }, 250)
+    return () => clearInterval(timer)
+  }, 'dsh-notify-interactive: return to session')
+
   try {
     // Diagnostics/support handle; the settings page is the normal entry point.
     globalThis.__dshNotifyInteractive = runtime

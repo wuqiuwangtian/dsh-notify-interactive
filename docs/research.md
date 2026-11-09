@@ -84,3 +84,26 @@ P0 调查已有桌面客户端或依赖时，应重新核实官方接口、维�
 ### 环境可观测性
 
 当前 WSL 可执行 Windows PowerShell，版本 `5.1.26100.9711`，退出码 0；未显示真实窗口。检查本机 Linux 进程/监听端口未发现 DSH launcher，已识别的 Node 监听者为 VS Code。无法从这些事实推出 Windows 侧没有 DSH，也不能据此检查用户故障页面。当前运行位置、访问地址和 Linux 桌面目标已询问，尚待补充。
+
+## 7. Arch WSL → Windows 完成提醒原型
+
+用户说明日常 Web/TUI 在 Arch WSL，Windows 使用 DSH Desktop；本轮聚焦 Web，后两者不扩展。本机 `/etc/os-release` 亦为 Arch Linux。
+
+选型：可替换 Electron 45.2.3 适配器，MIT；沿用 JavaScript/HTML/CSS 和本地 WAV 生成。Windows 解压运行时实测约 357 MiB，体积明显大于依赖系统 WebView 的方案，但可先避免 Rust/Windows WebView 构建链，直接验证窗口与数据协议。正式打包和体积优化尚未完成。
+
+官方依据：[BrowserWindow](https://www.electronjs.org/docs/latest/api/browser-window/)、[Context Isolation](https://www.electronjs.org/docs/latest/tutorial/context-isolation)、[Sandbox](https://www.electronjs.org/docs/latest/tutorial/sandbox)。实现关闭 renderer Node 集成，开启上下文隔离与沙箱；只加载本地 HTML，拒绝新窗/导航/权限请求；内容以 textContent 写入，不执行 DSH 传来的 HTML/JS。打开会话只允许 HTTP(S)，不接受 file/javascript URL。
+
+### 两个实测失败及调整
+
+1. 直接从 WSL UNC 路径启动 Windows Electron：GPU/渲染子进程启动失败。改为 installer 将运行时与窗口文件复制到 Windows LocalAppData 后可就绪；未关闭沙箱绕过。
+2. WSL spawn Windows GUI 程序：标准输入立即结束，无法可靠持续双向通信。改用 Windows 用户目录下每连接随机文件邮箱，命令/事件先写 tmp 再 rename，心跳 3 秒、15 秒过期退出。该目录继承 Windows 用户目录权限；同一用户的其他进程不在隔离威胁模型内。
+
+原型不启监听端口。主进程验证输入协议、URL、音频、theme token 名称和值长度；renderer 只暴露有限 contextBridge 方法，不暴露 ipcRenderer。原始内容与回答不写诊断日志；当前只支持完成提醒，没有应答接口。
+
+GitHub 运行时下载首次返回 504；改用 `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/` 下载成功，安装器保留固定版本包内校验和检查。镜像不是硬编码默认源，用户可自行选择；二进制不提交 Git。
+
+### 实测证据与未完成项
+
+`pnpm companion:smoke`：Windows 真实进程依次确认 visible=true/focused=false、visible=false 且 audio played=true、再次 visible=true；杀掉启动进程后下一条消息重新启动并 rendered。真实构建后 Host 路由（mock DSH webServer）返回 200 / shown=true / delivery=rendered。它验证桌面与宿主代码路径，不是实际 DSH 会话端到端。
+
+播放器开始播放不等于听感验收；窗口 visible 不等于用户在全屏/锁屏下必然看到。主题视觉、真实完成事件、回对应会话仍待用户运行中的 Web 验收。多事件 UI 队列、多标签去重、统一设置与所有场景交互按 P2/P3 实施。

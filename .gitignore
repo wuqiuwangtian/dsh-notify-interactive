@@ -5,3 +5,7 @@ Thumbs.db
 *.tgz
 .playwright/
 coverage/
+
+companion/.runtime.json
+
+.playwright-cli/

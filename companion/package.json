@@ -1,0 +1,9 @@
+{
+  "name": "dsh-notify-companion",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Local desktop surface for dsh-notify-interactive",
+  "license": "MIT",
+  "main": "main.cjs",
+  "devDependencies": { "electron": "45.2.3" }
+}

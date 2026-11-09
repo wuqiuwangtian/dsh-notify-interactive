@@ -9,6 +9,9 @@
  * when its interactive popup cannot be opened.
  */
 
+import { createCompanion } from './companion.js'
+import { renderPresetToDataUrl } from '../audio/wav.js'
+import { SOUND_PRESETS } from '../audio/sounds.js'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { messageForEvent, popupPayload, popupScript, shouldAutoNotify, truncate } from './logic.js'
@@ -102,6 +105,8 @@ function writeJson(res, status, value) {
 export function apply(ctx) {
   let lastPresence = null
   const lastNotify = new Map()
+  const companion = createCompanion()
+  let companionWarning = ''
 
   function notifyOnce(sessionId, kind, title, body, silent = false, url = '') {
     const now = Date.now()
@@ -155,8 +160,29 @@ export function apply(ctx) {
       const requestedUrl = typeof body?.url === 'string' && /^https?:\/\//.test(body.url)
         ? body.url
         : (process.env.DSH_WEB_URL ?? '')
+      if (process.env.DSH_NOTIFY_COMPANION === '1' && (kind === 'completion' || kind === 'demo-completion') && requestedUrl) {
+        const url = new URL(requestedUrl)
+        url.searchParams.set('dsh-notify-session', sessionId)
+        const sound = body?.sound ?? {}
+        const preset = SOUND_PRESETS.find(item => item.id === sound.preset)
+        const audio = body?.silent === true || sound.enabled === false || !preset ? '' : renderPresetToDataUrl(preset)
+        const result = await companion.deliver({
+          title, body: text, url: url.href, popup: true,
+          openLabel: truncate(body?.openLabel ?? 'DSH', 80), theme: body?.theme ?? {},
+          audio, volume: Number.isFinite(sound.volume) ? Math.max(0, Math.min(1, sound.volume)) : 0.7,
+        })
+        if (result.status === 'rendered') companionWarning = ''
+        if (result.status === 'rendered' || result.status === 'uncertain') {
+          writeJson(res, 200, { shown: result.status === 'rendered', delivery: result.status })
+          return
+        }
+        if (companionWarning !== result.reason) {
+          companionWarning = result.reason
+          console.warn('[dsh-notify-interactive] companion fallback:', result.reason)
+        }
+      }
       const shown = notifyOnce(sessionId, kind, title, text, body?.silent === true, requestedUrl)
-      writeJson(res, 200, { shown })
+      writeJson(res, 200, { shown, delivery: shown ? 'process-started' : 'unavailable' })
     } catch {
       res.writeHead(400)
       res.end()
@@ -184,6 +210,7 @@ export function apply(ctx) {
   })
 
   ctx.effect(() => () => {
+    companion.dispose()
     lastPresence = null
     lastNotify.clear()
   }, 'dsh-notify-interactive: host runtime')

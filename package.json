@@ -17,7 +17,17 @@
     "cordis.patch.yml",
     "README.md",
     "README.en.md",
-    "LICENSE"
+    "LICENSE",
+    "companion/main.cjs",
+    "companion/preload.cjs",
+    "companion/index.html",
+    "companion/renderer.js",
+    "companion/style.css",
+    "companion/package.json",
+    "companion/package-lock.json",
+    "scripts/install-companion.mjs",
+    "companion/protocol.cjs",
+    "scripts/stage-companion.mjs"
   ],
   "license": "MIT",
   "author": "wuqiuwangtian",
@@ -60,10 +70,12 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "check": "node --check lib/index.js && node --check lib/client.js",
+    "check": "node --check lib/index.js && node --check lib/client.js && node --check companion/main.cjs && node --check companion/preload.cjs && node --check companion/renderer.js && node --check companion/protocol.cjs",
     "test": "node --test tests/*.test.mjs",
     "verify": "pnpm build && pnpm check && pnpm test && pnpm render-smoke",
-    "render-smoke": "node scripts/render-smoke.mjs"
+    "render-smoke": "node scripts/render-smoke.mjs",
+    "companion:install": "node scripts/install-companion.mjs",
+    "companion:smoke": "pnpm build && node scripts/companion-smoke.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.25.0",

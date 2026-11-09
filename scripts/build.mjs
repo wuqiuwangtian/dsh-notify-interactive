@@ -42,7 +42,7 @@ if (!client.startsWith('window.__ModuleLoader__.load')) {
   throw new Error('client bundle wrapper is missing')
 }
 await writeFile(resolve(libDir, 'client.js'), client, 'utf8')
-await copyFile(resolve(root, 'src/host/index.js'), resolve(libDir, 'index.js'))
+await build({ entryPoints: [resolve(root, 'src/host/index.js')], outfile: resolve(libDir, 'index.js'), bundle: true, platform: 'node', format: 'esm', target: ['node20'] })
 await copyFile(resolve(root, 'src/host/logic.js'), resolve(libDir, 'logic.js'))
 
 const written = await readFile(resolve(libDir, 'client.js'), 'utf8')

@@ -133,3 +133,12 @@ export function applyTheme(sourceDocument, targetDocument) {
   }
   copyThemeAttributes(sourceDocument, targetDocument)
 }
+
+/** Serializable token values for the separate desktop renderer. */
+export function snapshotTheme(sourceDocument = globalThis.document) {
+  const root = sourceDocument?.documentElement
+  const view = sourceDocument?.defaultView
+  if (!root || !view) return {}
+  const computed = view.getComputedStyle(root)
+  return Object.fromEntries(KNOWN_TOKENS.map(name => [name, computed.getPropertyValue(name).trim()]).filter(([, value]) => value))
+}

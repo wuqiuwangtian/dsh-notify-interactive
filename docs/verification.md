@@ -99,3 +99,48 @@ pnpm verify
 - 桌面上游固定提交源码核查完成，详见 research 第 6 节；不是兼容性验收。
 
 用户验证此修复：加载新的 client bundle（安装包指向本仓库时刷新页面），关闭音效并保持通知窗口关闭；切到其他应用，触发真实审批或完成。预期现有 Windows 兜底仍可显示，但不请求系统提示音。前提是该机器原来的 Windows 兜底能正常投递；如果仍不显示，按第 3 节检查投递链路，不能认为静音补丁修好了弹窗。测试 Windows 按钮是演示路径，不能替代此验收。
+
+## 7. P1：Arch WSL → Windows 原型
+
+### 本轮实际证据
+
+- Windows Electron 45.2.3 已下载、通过包内校验并复制到当前 Windows 用户 LocalAppData/DSHNotifyInteractive/companion；二进制与本机 `.runtime.json` 不入 Git。不涉及开机自启或系统级安装。
+- `pnpm companion:smoke`：真实 Windows 进程验证显示/不抢焦点 → 隐藏且音频开始播放 → 再次显示；进程中断后重新启动成功。构建后的 Host 路由通过（mock webServer、真实桌面进程），返回 HTTP 200、shown=true、delivery=rendered。
+- 新增 6 项测试覆盖确认、超时不确定性、进程复用/重启、旧进程迟到退出、停用、协议输入校验；`pnpm verify` 总计 64 项通过。
+- `npm pack --dry-run --json` 确认包中没有 node_modules、electron.exe 或本机 `.runtime.json`；测试完成后 Windows 中匹配本项目路径的 Electron 进程数为 0。
+- 本机 web profile 依赖实际为 `link:/home/wqwt/code/dsh-notify-interactive`。检查时 `127.0.0.1:3080` 已有 DSH Web，GET 插件投递路由返回 405（仅 POST）；现有进程未启用 DSH_NOTIFY_COMPANION。
+- 曾尝试启动带开关实例，因 3080 占用而退出；没有停止或重启现有服务。独立 Playwright 页面访问站点返回 401，未获取登录凭据、未绕过认证。因此真实 DSH 页面/会话未完成自动验证。测试浏览器已关闭。
+
+### 在当前仓库验收
+
+安装器需要 Node.js >=22.12；DSH 插件本身仍支持 Node.js 20。Windows 运行时约 357 MiB，WSL 下载副本另占相近空间。若本机已完成安装，只修改窗口文件后运行 staging 即可。
+
+```sh
+pnpm companion:install
+# 窗口文件变更后的同步（无需重装运行时依赖）
+node scripts/stage-companion.mjs
+# 会短暂显示演示窗口并播放一次音效；结束自动清理测试进程
+pnpm companion:smoke
+```
+
+默认从 GitHub 下载；本轮 GitHub 返回 504，使用以下可选镜像成功，仍保留固定版本包内校验和检查：
+
+```sh
+ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ pnpm companion:install
+```
+
+真实 Web 验收需要在当前任务安全结束后重启 DSH，以加载宿主代码与开关。本轮没有代替用户中断运行中的服务。停止旧进程后，在 Arch WSL 启动：
+
+```sh
+DSH_NOTIFY_COMPANION=1 dsh --profile web --no-open
+```
+
+1. 在自己已认证的 Windows 浏览器打开 DSH，刷新页面；保持旧 Web 交互弹窗关闭（否则引擎仍会投递给旧窗口）。
+2. 设置 → 互动提醒 → 测试完成卡：应自动出现 Windows 自绘完成窗，不需先点打开弹窗。此按钮是显式演示，不能证明真实事件静默规则。
+3. 选择一个真实会话执行正常任务，切到别的应用等待该轮结束。预期自绘窗自动出现、不抢焦点；点击会话入口后页面通过插件查询参数选择同一会话。真实定位尚待此项确认。
+4. 关闭窗口后再次触发完成，预期仍自动出现。关闭音效后重复，预期不请求播放声音；聚焦当前会话完成时完全静默。
+5. 审批/提问目前继续使用旧路径；弹窗总开关/分事件设置、统一宿主配置、完整交互、多标签协调尚未实现，不作为此原型已通过项。
+
+`delivery=rendered` 表示 renderer 已创建内容并由主进程请求显示，不证明锁屏/全屏环境下用户看到。超时返回 uncertain，不再盲目弹第二个旧窗。明确不可用/失败才回退旧 WinForms，宿主会打印不含会话正文的原因。
+
+回退：重启时去掉 DSH_NOTIFY_COMPANION 或设为 0，恢复旧投递行为。没有添加开机自启；宿主退出会要求辅助程序退出，父进程失联后租约约 15 秒过期退出。Windows 缓存可能因文件锁暂留临时目录；原型尚无正式卸载器。
