@@ -50,7 +50,10 @@ function createHarness(overrides = {}, options = {}) {
   const engine = createEngine({
     settingsStore,
     notificationStore,
-    soundPlayer: { play: (preset, volume) => soundCalls.push({ preset, volume }) },
+    soundPlayer: { play: (preset, volume) => {
+      soundCalls.push({ preset, volume })
+      return options.soundPlayed ?? true
+    } },
     translate: (key) => key,
     resolveText: (value) => value?.en ?? '',
     getVisibility: () => options.visibility ?? 'hidden',
@@ -240,3 +243,29 @@ test('findMainSessionId and truncate are stable helpers', () => {
   assert.equal(truncate('a'.repeat(10), 5), 'aaaa…')
   assert.equal(truncate('short', 10), 'short')
 })
+
+for (const kind of ['approval', 'completion']) {
+  for (const [label, settings, soundPlayed, silent] of [
+    ['sound disabled', { sound: { enabled: false } }, false, true],
+    ['scenario muted', { scenarios: { approval: { sound: false }, completion: { sound: false } } }, false, true],
+    ['silent preset', { sound: { preset: 'none' } }, false, true],
+    ['zero volume', { sound: { volume: 0 } }, false, true],
+    ['Web playback succeeded', {}, true, true],
+    ['Web playback failed while sound enabled', {}, false, false],
+  ]) {
+    test(`${kind} Windows fallback respects ${label}`, () => {
+      const harness = createHarness(settings, { soundPlayed })
+      try {
+        harness.engine.ingest(statusOf(), sessionsOf())
+        harness.engine.ingest(
+          kind === 'approval' ? statusOf({ pendingInteraction: approval() }) : statusOf({ running: false }),
+          sessionsOf(),
+        )
+        assert.equal(harness.windowsCalls.length, 1, 'popup delivery stays enabled')
+        assert.equal(harness.windowsCalls[0].silent, silent)
+      } finally {
+        harness.engine.dispose()
+      }
+    })
+  }
+}

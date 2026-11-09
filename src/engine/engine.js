@@ -85,6 +85,12 @@ export function createEngine(options) {
     return soundPlayer?.play?.(settings.sound.preset, settings.sound.volume) === true
   }
 
+  // A failed Web playback may use the system sound only when sound is allowed.
+  function fallbackSilent(settings, gate, soundPlayed) {
+    return !gate.sound || settings.sound.preset === 'none'
+      || settings.sound.volume <= 0 || soundPlayed
+  }
+
   function deliverWindows(kind, sessionId, sessionTitle, title, body, silent) {
     onWindowsFallback?.({
       kind,
@@ -145,7 +151,7 @@ export function createEngine(options) {
       demo: false,
     })
     if (!isPopupOpen()) {
-      deliverWindows(kind, sessionId, sessionTitle, fallbackTitle(kind), interactionBody(interaction, sessionTitle), soundPlayed)
+      deliverWindows(kind, sessionId, sessionTitle, fallbackTitle(kind), interactionBody(interaction, sessionTitle), fallbackSilent(settings, gate, soundPlayed))
     }
   }
 
@@ -196,7 +202,7 @@ export function createEngine(options) {
         sessionTitle,
         fallbackTitle('completion'),
         truncate([sessionTitle, t('notify.completion.body')].filter(Boolean).join(' · ')),
-        soundPlayed,
+        fallbackSilent(settings, gate, soundPlayed),
       )
     }
   }
