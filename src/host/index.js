@@ -166,8 +166,11 @@ export function apply(ctx) {
         const sound = body?.sound ?? {}
         const preset = SOUND_PRESETS.find(item => item.id === sound.preset)
         const audio = body?.silent === true || sound.enabled === false || !preset ? '' : renderPresetToDataUrl(preset)
+        const sessionTitle = truncate(body?.sessionTitle ?? '', 200)
+        const prefix = `${sessionTitle} · `
+        const desktopBody = sessionTitle && text.startsWith(prefix) ? text.slice(prefix.length) : text
         const result = await companion.deliver({
-          title, body: text, url: url.href, popup: true,
+          title, sessionTitle, body: desktopBody, url: url.href, popup: true,
           openLabel: truncate(body?.openLabel ?? 'DSH', 80), closeLabel: truncate(body?.closeLabel ?? 'Close', 80), theme: body?.theme ?? {},
           audio, volume: Number.isFinite(sound.volume) ? Math.max(0, Math.min(1, sound.volume)) : 0.7,
         })

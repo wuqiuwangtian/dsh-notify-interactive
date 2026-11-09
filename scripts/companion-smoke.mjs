@@ -19,7 +19,7 @@ const companion = createCompanion({ spawn: (...args) => { child = spawn(...args)
 try {
   for (const popup of [true, false, true]) {
     const result = await companion.deliver({
-      title: 'DSH 提醒原型', body: popup ? 'WSL → Windows：无需预开通知窗口。此为演示，不是真实会话事件。' : '',
+      title: 'DSH 提醒原型', sessionTitle: '消息提醒插件 · Web 端联调', body: popup ? 'WSL → Windows：无需预开通知窗口。此为演示，不是真实会话事件。' : '',
       openLabel: '打开会话', closeLabel: '关闭', url: 'http://localhost:3000/?dsh-notify-session=demo',
       theme, popup, audio: popup ? '' : renderPresetToDataUrl(SOUND_PRESETS[0]), volume: 0.2,
     })

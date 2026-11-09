@@ -94,6 +94,10 @@ export function apply(ctx) {
       const body = JSON.stringify({
         kind: payload?.kind,
         sessionId: payload?.sessionId,
+        sessionTitle: payload?.sessionTitle ?? (() => {
+          const row = ctx.get('sessions')?.list?.getSnapshot?.()?.byId?.[payload?.sessionId]
+          return row?.displayTitle ?? row?.title ?? ''
+        })(),
         title: payload?.title,
         body: payload?.body,
         silent: payload?.silent === true,

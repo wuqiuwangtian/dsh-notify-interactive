@@ -71,7 +71,8 @@ app.whenReady().then(async () => {
     if (current.popup !== false) {
       const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea
       const [width, height] = win.getSize()
-      win.setPosition(Math.max(area.x, area.x + area.width - width - 20), Math.max(area.y, area.y + area.height - height - 20))
+      const bottomInset = process.platform === 'win32' ? 48 : 20
+      win.setPosition(Math.max(area.x, area.x + area.width - width - 20), Math.max(area.y, area.y + area.height - height - bottomInset))
       win.showInactive()
     } else win.hide()
     send({ type: 'rendered', id, visible: win.isVisible(), focused: win.isFocused(), bounds: win.getBounds(), scaleFactor: screen.getDisplayMatching(win.getBounds()).scaleFactor })

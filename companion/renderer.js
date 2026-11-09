@@ -7,6 +7,10 @@ window.reminder.onMessage(message => {
       document.documentElement.style.setProperty(name, value)
     }
   }
+  const session = document.getElementById('session')
+  session.textContent = message.sessionTitle ?? ''
+  session.title = message.sessionTitle ?? ''
+  session.hidden = !message.sessionTitle
   document.getElementById('body').textContent = message.body
   document.getElementById('open').textContent = message.openLabel
   // Older running hosts do not forward closeLabel yet; preserve their UI language.
