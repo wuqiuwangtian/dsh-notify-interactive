@@ -6,7 +6,7 @@ DSH Web reminders: stay silent while attending the relevant conversation, otherw
 
 ## Development status
 
-The November 21 plan moves Windows delivery to native app notifications with Notification Center history. The implementation described below predates this migration. The opt-in native preview handles approvals, questions, plans and turn completions, with four completion timing options and independent audio. Click a notification to open the original Web session. Run `pnpm native:acceptance --windows-toast --host <WSL-IPv4> --port <free-port>` to try an isolated profile. See the [current roadmap](docs/requirements.md).
+The November 21 plan moves Windows delivery to native app notifications with Notification Center history. The implementation described below predates this migration. The opt-in native preview handles approvals, questions, plans and turn completions, with four completion timing options and independent audio. Click the body to open the original Web session. With an authenticated page owning the live request, Notification Center supports one-time approval, rejection and short text or single-choice answers. Open the session for batches and plan reviews. Run `pnpm native:acceptance --windows-toast --host <WSL-IPv4> --port <free-port>` to try an isolated profile. See the [current roadmap](docs/requirements.md).
 
 P3 answer-bridge development code targeting DSH 0.2.2-rc.1. Package version remains 0.2.1; these changes are unreleased.
 

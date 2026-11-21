@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
+import { createToastActions, startToastActivator } from './toast-actions.js'
 import { SOUND_PRESETS } from '../audio/sounds.js'
 import { renderPresetToDataUrl } from '../audio/wav.js'
 
@@ -37,34 +38,64 @@ export function nativeToast(fact, origin, profile, payload) {
     group: historyGroup(profile, fact.kind !== 'completion'), tag: digest(fact.id) }
 }
 
-export function createToastTransport(origin, profile, send = callWindows) {
+export function createToastTransport(origin, profile, send = callWindows, submit) {
   const pending = new Set()
   const group = historyGroup(profile, true)
+  const remove = id => send({ group, removeTag: digest(id) })
+  const withdraw = id => {
+    if (pending.delete(id)) return remove(id).catch(() => console.warn('[dsh-notify-interactive] Windows history removal failed'))
+  }
+  const actions = submit && createToastActions({ register: instance => startToastActivator(shell, instance), submit, withdraw })
+  let disposed = false
+  const prepare = () => actions?.prepare().catch(() => console.warn('[dsh-notify-interactive] Windows actions unavailable'))
+  void prepare()
   let ready
   function initialize() {
     ready ??= send({ removeGroup: group }).catch(error => { ready = undefined; throw error })
     return ready
   }
   initialize().catch(() => {}) // Retry a transient startup failure on delivery.
-  const remove = id => send({ group, removeTag: digest(id) })
   return {
     profileId: historyGroup(profile, false),
-    async deliver({ fact, payload, getPolicy, isCurrent }) {
+    async deliver({ fact, payload, getPolicy, isCurrent, getInteraction }) {
       await initialize()
+      const interactive = actions && getInteraction && ['approval', 'question'].includes(fact.kind)
+      if (interactive && getPolicy().popup) await prepare()
       const policy = getPolicy()
-      if (!isCurrent() || (!policy.popup && !policy.sound)) return { shown: false, delivery: 'suppressed' }
+      if (disposed || !isCurrent() || (!policy.popup && !policy.sound)) return { shown: false, delivery: 'suppressed' }
       const preset = policy.sound && SOUND_PRESETS.find(item => item.id === policy.preset)
       const wav = preset ? renderPresetToDataUrl(preset, policy.volume).split(',')[1] : ''
       const toast = nativeToast(fact, origin, profile, payload)
-      const status = await send({ ...toast, popup: policy.popup, wav })
+      const live = () => !disposed && isCurrent() && getPolicy().popup
+      const failure = async () => {
+        if (!live()) return
+        await send({ ...toast, body: '请打开会话核对请求状态。', popup: true })
+        if (!live()) await remove(fact.id)
+      }
+      const form = interactive && policy.popup ? actions.bind(fact.id, getInteraction, live, failure) : null
+      if (form) toast.body = form.prompt
+      let status
+      try { status = await send({ ...toast, form, popup: policy.popup, wav }) }
+      finally { if (status !== 'accepted') actions?.revoke(fact.id) }
       if (policy.popup && status === 'accepted' && fact.kind !== 'completion') {
-        if (isCurrent() && getPolicy().popup) pending.add(fact.id)
-        else await remove(fact.id)
+        if (live() && (!form || actions.current(fact.id, getInteraction()))) pending.add(fact.id)
+        else {
+          actions?.revoke(fact.id)
+          await remove(fact.id)
+        }
       }
       return { shown: false, delivery: status }
     },
+    update(id, view) {
+      if (pending.has(id) && actions?.changed(id, view)) void withdraw(id)
+    },
+    dispose() {
+      disposed = true
+      void actions?.dispose()
+    },
     retire(fact) {
-      if (pending.delete(fact.id)) return remove(fact.id).catch(() => console.warn('[dsh-notify-interactive] Windows history removal failed'))
+      actions?.revoke(fact.id)
+      return withdraw(fact.id)
     },
   }
 }

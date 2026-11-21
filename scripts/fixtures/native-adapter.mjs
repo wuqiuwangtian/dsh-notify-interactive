@@ -5,7 +5,7 @@ export function createNativeAdapter(LlmAdapter, ctx) {
   return new class extends LlmAdapter {
     providerInfo() { return { id: 'notify-fixture', name: 'Local notification acceptance (no network)' } }
     async listModels() {
-      return ['approval', 'question', 'plan', 'completion'].map(id => ({ provider: 'notify-fixture', id, name: id }))
+      return ['approval', 'question', 'simple-question', 'plan', 'completion'].map(id => ({ provider: 'notify-fixture', id, name: id }))
     }
     async resolveModel(provider, model) {
       return { provider, id: model, name: model, context: { contextWindow: 1_000_000 }, defaultMaxTokens: 4096 }
@@ -19,7 +19,7 @@ export function createNativeAdapter(LlmAdapter, ctx) {
           callId: randomUUID(), reason: 'Isolated test. No command or file access.', signal: options.signal })
         value = `Approval outcome: ${outcome}`
       }
-      if (act && ['question', 'plan'].includes(options.model)) {
+      if (act && ['question', 'simple-question', 'plan'].includes(options.model)) {
         const questions = [
           { id: 'single', question: 'Select test platform', options: [{ label: 'Windows' }, { label: 'Linux' }] },
           { id: 'multi', question: 'Select channels', multi_select: true, options: [{ label: 'Popup' }, { label: 'Sound' }] },
@@ -28,7 +28,7 @@ export function createNativeAdapter(LlmAdapter, ctx) {
         const block = { type: 'tool-call', id: randomUUID(), name: options.model === 'plan' ? 'exit_plan_mode' : 'ask_user_question',
           arguments: JSON.stringify(options.model === 'plan'
             ? { plan: '# Notification acceptance plan\n\n1. Show the request\n2. Wait for explicit user action' }
-            : { questions }) }
+            : { questions: options.model === 'simple-question' ? questions.slice(0, 1) : questions }) }
         yield { type: 'block-start', index: 0, blockType: 'tool-call' }
         yield { type: 'tool-call-delta', index: 0, id: block.id, name: block.name, argumentsDelta: block.arguments }
         yield { type: 'block-end', index: 0, block }

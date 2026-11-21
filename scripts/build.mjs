@@ -43,8 +43,9 @@ if (!client.startsWith('window.__ModuleLoader__.load')) {
 }
 await writeFile(resolve(libDir, 'client.js'), client, 'utf8')
 await build({ entryPoints: [resolve(root, 'src/host/index.js')], outfile: resolve(libDir, 'index.js'), bundle: true, platform: 'node', format: 'esm', target: ['node20'] })
-await copyFile(resolve(root, 'src/host/notification.ps1'), resolve(libDir, 'notification.ps1'))
-await copyFile(resolve(root, 'src/host/logic.js'), resolve(libDir, 'logic.js'))
+for (const name of ['logic.js', 'notification.ps1', 'ToastActivator.cs', 'register-toast.ps1']) {
+  await copyFile(resolve(root, 'src/host', name), resolve(libDir, name))
+}
 
 const written = await readFile(resolve(libDir, 'client.js'), 'utf8')
 console.log(`built lib/client.js (${written.length} bytes) and lib/index.js`)

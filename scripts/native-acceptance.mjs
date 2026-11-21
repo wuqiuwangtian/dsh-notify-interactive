@@ -68,7 +68,7 @@ export function apply(ctx) { applyHost(ctx, { nativeOrigin: ${JSON.stringify(ori
   await symlink(wrapper, join(profile, 'node_modules/dsh-notify-interactive'))
   await symlink(fixture, join(profile, 'node_modules/notify-native-fixture'))
   const env = Object.fromEntries(['PATH', 'HOME', 'SHELL', 'LANG', 'TERM', 'WSL_INTEROP', 'WSL_DISTRO_NAME', 'USER', 'LOGNAME', 'TMPDIR', 'XDG_RUNTIME_DIR'].filter(key => process.env[key]).map(key => [key, process.env[key]]))
-  console.log(`Isolated DSH home: ${root}\nTest workspace: ${join(root, 'workspace')}\nSelect notify-fixture approval/question/plan/completion. For plan, use /plan on. Use another conversation to test desktop delivery. ${args.includes('--timed') ? 'Questions continue after one second.' : 'Questions block until answered.'}`)
+  console.log(`Isolated DSH home: ${root}\nTest workspace: ${join(root, 'workspace')}\nSelect notify-fixture approval/simple-question/question/plan/completion. For plan, use /plan on. Use another conversation to test desktop delivery. ${args.includes('--timed') ? 'Questions continue after one second.' : 'Questions block until answered.'}`)
   let restartRequested = false
   let stopping = false
   const stop = () => { stopping = true; child?.kill('SIGTERM') }

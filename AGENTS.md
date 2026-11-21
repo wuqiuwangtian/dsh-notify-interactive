@@ -4,7 +4,7 @@
 
 ## 项目定位
 
-Windows 路线于 2026-11-21 改为原生应用通知，首轮为 Arch WSL DSH Web → Windows 通知中心。实施顺序与门槛见 `docs/requirements.md` 第 5 节。下文的 Electron、PowerShell 与旧冒烟记录用于理解迁移起点。阶段 2 的可选原生通道见 `src/host/windows-toast.js` 与 `src/host/notification.ps1`；后者随 build 同步至 lib。默认按事件所属会话静默，四类事件的通知与声音分别配置。复杂交互回 DSH Web。
+Windows 路线于 2026-11-21 改为原生应用通知，首轮为 Arch WSL DSH Web → Windows 通知中心。实施顺序与门槛见 `docs/requirements.md` 第 5 节。下文的 Electron、PowerShell 与旧冒烟记录用于理解迁移起点。可选原生通道入口为 `src/host/windows-toast.js`。阶段 3 的按钮绑定与失效见 `src/host/toast-actions.js`；Windows 激活回调使用随 build 打包的 `ToastActivator.cs`、`register-toast.ps1` 和 `notification.ps1`。默认按事件所属会话静默，四类事件的通知与声音分别配置。复杂交互回 DSH Web。
 
 ## 关键约束
 

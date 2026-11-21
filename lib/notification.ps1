@@ -30,6 +30,24 @@ if ($data.popup) {
     $lines = $xml.GetElementsByTagName('text')
     $lines.Item(0).InnerText = $data.title
     $lines.Item(1).InnerText = $data.body
+    if ($data.form) {
+        $actions = $xml.CreateElement('actions')
+        if ($data.form.input) {
+            $field = $xml.CreateElement('input')
+            $field.SetAttribute('id', 'reply')
+            $field.SetAttribute('type', 'text')
+            $field.SetAttribute('placeHolderContent', '输入回答')
+            $null = $actions.AppendChild($field)
+        }
+        foreach ($button in $data.form.buttons) {
+            $action = $xml.CreateElement('action')
+            $action.SetAttribute('activationType', 'foreground')
+            $action.SetAttribute('content', [string]$button.label)
+            $action.SetAttribute('arguments', [string]$button.argument)
+            $null = $actions.AppendChild($action)
+        }
+        $null = $xml.DocumentElement.InsertBefore($actions, $xml.GetElementsByTagName('audio').Item(0))
+    }
     $toast = [Windows.UI.Notifications.ToastNotification, Windows.UI.Notifications, ContentType=WindowsRuntime]::new($xml)
     $toast.Tag = $data.tag
     $toast.Group = $data.group

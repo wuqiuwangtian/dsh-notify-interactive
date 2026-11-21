@@ -107,7 +107,7 @@ export function applyHost(ctx, services = {}) {
   let profile
   try { profile = ctx.get?.('profileContext') ?? ctx.profileContext } catch { /* Profiles are optional in test/native embeddings. */ }
   const nativeOrigin = services.nativeOrigin ?? process.env.DSH_NOTIFY_WINDOWS_ORIGIN
-  const native = nativeOrigin && profile?.dir ? createToastTransport(nativeOrigin, profile.dir) : null
+  const native = nativeOrigin && profile?.dir ? createToastTransport(nativeOrigin, profile.dir, undefined, packet => interactions.submit(packet)) : null
   const deliver = native?.deliver ?? services.deliver ?? deliverNotification
   const preferences = createPreferences(profile?.dir ? join(profile.dir, 'notify-interactive.settings.json') : undefined)
   let presentation = null
@@ -127,7 +127,7 @@ export function applyHost(ctx, services = {}) {
     if (event.type === 'interaction') void interactions.submit(event).then(result => companion.interactionResult?.(event.id, event.actionId, result.status))
   } }))
   const interactions = createInteractionBroker({ coordinator,
-    onUpdate: (eventId, view) => { void companion.updateInteraction?.(eventId, view) } })
+    onUpdate: (eventId, view) => { native?.update(eventId, view); void companion.updateInteraction?.(eventId, view) } })
   // Also allow an injected transport to exercise the identical command path.
   companion.onInteraction?.(async event => interactions.submit(event))
   const interactionSweep = setInterval(() => interactions.sweep(), 1000)
@@ -384,6 +384,7 @@ export function applyHost(ctx, services = {}) {
   ctx.effect(() => () => {
     for (const timer of timers) clearTimeout(timer)
     clearInterval(interactionSweep)
+    native?.dispose()
     interactions.dispose()
     coordinator.clear()
     companion.dispose()
