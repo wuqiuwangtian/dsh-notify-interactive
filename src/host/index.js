@@ -101,6 +101,7 @@ function writeJson(res, status, value) {
  * @param {object} ctx Host Cordis context.
  */
 export function applyHost(ctx, services = {}) {
+  const deliver = services.deliver ?? deliverNotification
   const coordinator = createCoordinator()
   const timers = new Set()
   let profile
@@ -270,7 +271,7 @@ export function applyHost(ctx, services = {}) {
     const sessionTitle = truncate(body.sessionTitle ?? '', 200)
     const text = truncate(body.body ?? '', 500)
     const prefix = `${sessionTitle} · `
-    const result = await deliverNotification({ companion, available: services.available ?? getCompanionStatus().enabled,
+    const result = await deliver({ fact, companion, available: services.available ?? getCompanionStatus().enabled,
       legacy, policy, getInteraction: () => interactions.presentation(fact.id),
       getPolicy: () => { const value = channelPolicy(preferences.current(), body.kind, coordinator.attended(body.sessionId, fact.at)); if (legacyClient && body.silent) value.sound = false; return value },
       isCurrent: () => coordinator.resolve(body.sessionId, body.kind, body.callId)?.id === fact.id,
@@ -336,7 +337,7 @@ export function applyHost(ctx, services = {}) {
         const payload = { eventId: fact.id, interaction: interactions.presentation(fact.id), sticky: message.kind !== 'completion', title: message.title, sessionTitle: '', body: message.body,
           url: url?.href ?? 'http://localhost/', theme: presentation?.theme ?? {},
           openLabel: presentation?.openLabel ?? 'DSH', closeLabel: presentation?.closeLabel ?? 'Close' }
-        const result = await deliverNotification({ companion, policy,
+        const result = await deliver({ fact, companion, policy,
           available: Boolean(presentation) && (services.available ?? getCompanionStatus().enabled),
           legacy, payload, getInteraction: () => interactions.presentation(fact.id),
           getPolicy: () => channelPolicy(preferences.current(), message.kind, coordinator.attended(session.id, fact.at)),

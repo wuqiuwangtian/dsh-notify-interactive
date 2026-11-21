@@ -1,6 +1,6 @@
 # 验证证据与目标验收
 
-2026-11-21 路线切换为 Windows 原生应用通知。下列章节保留旧实现的历史证据，其中的“下一步”均对应当时版本。新路线的实机验收与阶段状态见 [需求第 5 节](requirements.md#5-实施顺序与验收门槛)。目前仅在本机 Windows build 26300 读到通知模式 `Unrestricted`，尚未验收原生横幅、历史条目、勿扰切换或冷启动激活。
+2026-11-21 路线切换为 Windows 原生应用通知。第 1–13 节保留旧实现的历史证据，其中的“下一步”均对应当时版本。新路线的实机验收与阶段状态见 [需求第 5 节](requirements.md#5-实施顺序与验收门槛)。第 14 节记录新路线首次通过的完成通知与点击交接。勿扰切换仍待阶段 2 实测。
 
 ## 1. 上轮文档审阅验证（保留记录）
 
@@ -278,3 +278,17 @@ pnpm native:acceptance --host <本机可达的地址> --timed
 ### 剩余验收与接续
 
 下一项按 requirements 第 5 节：日常实例中确认上述能力与 Windows 默认浏览器交接，实际中文输入法候选确认、桌面真实焦点/倒计时、多屏/缩放及旧浏览器作答窗并存策略仍未验收。自动合成 isComposing 事件不等于真实 IME。Linux 原生桌面、TUI、DSH Desktop 未扩大；暂不进入 P4/P5。
+
+## 14. Windows 通知中心完成提醒
+
+2026-11-21。环境为 Arch WSL、DSH 0.2.2-rc.5、Windows build 26300，默认浏览器 Edge。仅隔离验收的 `--windows-toast` 启用预览。辅助程序通过 Windows PowerShell 调用 WinRT ToastGeneric，系统负责绘制和打开 HTTP 链接。选择这条路径可以先验证通知中心与默认浏览器，无需安装 .NET SDK 或启动 Electron。投递进程在 Show 返回后退出。
+
+1. 使用 Windows 可以直接访问的 WSL IPv4 和空闲端口，例如 `pnpm native:acceptance --windows-toast --host <WSL-IPv4> --port 39713`。在默认浏览器打开终端打印的临时登录链接，添加脚本打印的 workspace。
+2. 在会话 A 选择本地 notify-fixture 的 completion 模型，从 A 发起一轮任务。事件到来时前台看 B；为避免本地模型立即结束，可从隔离页面调用 A 的 SessionFace.prompt，在 B 中保持焦点。检查通知标题和结束正文。
+3. 横幅消失后按 Win+N，在 DSH Web (Preview) 下点击 A 的通知，应进入 A。测试期间保持临时 DSH 服务在线。Ctrl+C 结束时清理该实例的通知组与临时 profile，预览应用显示名留在当前 Windows 用户注册中供下次复用。
+
+实测有两次独立 profile 从真实完成事件走到 Windows 历史条目，读取到目标会话链接、标题和正文。第一次用户亲自从 Win+N 点击，确认默认 Edge 进入“Local acceptance complete.”会话。验证用本地确定性适配器，无外部模型请求。系统 Show 的返回状态记录为 accepted，未用它代替桌面观察。
+
+在隔离 Chromium 中另测了两条链接恢复路径：关闭原页面后，同一已登录浏览器上下文新开页面可定位 A；无登录 cookie 时目标链接返回 DSH 的 HTTP 401，在另一标签完成登录后刷新原目标页即可回 A。需要重新登录时依赖用户刷新，并未实现自动续跳。此两项为浏览器导航验证，真实通知中心点击由上面的 Edge 记录覆盖。
+
+`pnpm verify` 通过 106 项测试、构建、语法和渲染。新增回归覆盖通知目标只取配置 origin 和目标会话、跨 profile 分组、不同轮次标识，以及过期／禁用／非完成事件。正式安装、日常服务、完整声音策略和原生审批仍属后续阶段。

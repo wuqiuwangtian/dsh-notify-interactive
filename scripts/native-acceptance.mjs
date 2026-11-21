@@ -6,23 +6,31 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { isIP } from 'node:net'
+import { removePreviewHistory } from './windows/completion-toast.mjs'
 import { createPreferences } from '../src/host/preferences.js'
 
 const args = process.argv.slice(2)
 if (args.includes('--help')) {
-  console.log('pnpm native:acceptance [--host <local-IP>] [--port <port>] [--timed] [--desktop-debug-port <port>]\nRequires an installed DSH 0.2.2-rc.1. Creates a temporary home, silent settings and a local no-network adapter; Ctrl+C cleans up. Optional DSH_NOTIFY_DSH_BIN selects the launcher.')
+  console.log('pnpm native:acceptance [--host <local-IP>] [--port <port>] [--timed] [--windows-toast] [--desktop-debug-port <port>]\nWindows toast preview requires --host and a fixed --port, uses silent native completion notifications and ignores other events. Creates a temporary home, silent settings and a local no-network adapter; Ctrl+C cleans up. Optional DSH_NOTIFY_DSH_BIN selects the launcher.')
   process.exit(0)
 }
 const value = name => args.includes(name) ? args[args.indexOf(name) + 1] : undefined
 const port = Number(value('--port') ?? 0), debugPort = Number(value('--desktop-debug-port') ?? 0)
 if (![port, debugPort].every(n => Number.isInteger(n) && n >= 0 && n <= 65535)) throw Error('invalid-port')
+const windowsToast = args.includes('--windows-toast')
+const address = value('--host')
+if (windowsToast && (!port || isIP(address ?? '') !== 4 || address === '0.0.0.0' || debugPort)) {
+  throw Error('windows-toast-requires-reachable-IPv4-fixed-port-and-no-desktop-debug')
+}
 const binary = realpathSync(process.env.DSH_NOTIFY_DSH_BIN ?? execFileSync('which', ['dsh'], { encoding: 'utf8' }).trim())
 const installation = resolve(dirname(binary), '..'), require = createRequire(join(installation, 'package.json'))
 const repo = fileURLToPath(new URL('..', import.meta.url))
 const root = await mkdtemp(join(tmpdir(), 'dsh-notify-native-'))
+const profile = join(root, 'profiles/web')
 let child
 try {
-  const profile = join(root, 'profiles/web'), fixture = join(root, 'fixture'), wrapper = join(root, 'notify-wrapper')
+  const fixture = join(root, 'fixture'), wrapper = join(root, 'notify-wrapper')
   await Promise.all([mkdir(join(profile, 'node_modules'), { recursive: true }), mkdir(fixture), mkdir(wrapper), mkdir(join(root, 'workspace'))])
   await writeFile(join(profile, 'package.json'), JSON.stringify({ name: 'notify-native-profile', private: true,
     dependencies: { 'dsh-notify-interactive': `link:${wrapper}`, 'notify-native-fixture': `link:${fixture}` },
@@ -50,6 +58,17 @@ try {
   const hostUrl = new URL('../lib/index.js', import.meta.url).href
   let host = `export {apply} from ${JSON.stringify(hostUrl)}\n`
   if (debugPort) host = `import{applyHost}from ${JSON.stringify(hostUrl)}; import{createCompanion,resolveCompanionLaunch}from ${JSON.stringify(new URL('../src/host/companion.js', import.meta.url).href)};export function apply(ctx){let submit;const companion=createCompanion({launch(){const c=resolveCompanionLaunch();return {...c,args:[...c.args,'--remote-debugging-port=${debugPort}','--remote-debugging-address=127.0.0.1']}},onEvent(e){if(e.type==='interaction')void submit(e).then(r=>companion.interactionResult(e.id,e.actionId,r.status))}});companion.onInteraction=handler=>{submit=handler};applyHost(ctx,{companion})}\n`
+  if (windowsToast) {
+    const origin = new URL(`http://${address}:${port}`).origin
+    const adapter = new URL('./windows/completion-toast.mjs', import.meta.url).href
+    host = `import {applyHost} from ${JSON.stringify(hostUrl)}
+import {createToastDelivery} from ${JSON.stringify(adapter)}
+export function apply(ctx) {
+  applyHost(ctx, { deliver: createToastDelivery(${JSON.stringify(origin)}, ${JSON.stringify(profile)}),
+    companion: { dispose() {} }, available: false, legacy: () => false })
+}
+`
+  }
   await writeFile(join(wrapper, 'host.mjs'), host)
   await symlink(wrapper, join(profile, 'node_modules/dsh-notify-interactive'))
   await symlink(fixture, join(profile, 'node_modules/notify-native-fixture'))
@@ -61,5 +80,8 @@ try {
   process.exitCode = await new Promise((done, reject) => { child.once('error', reject); child.once('exit', code => done(code ?? 0)) })
   process.off('SIGINT', stop); process.off('SIGTERM', stop)
 } finally {
+  if (windowsToast && child) {
+    await removePreviewHistory(profile).catch(() => console.warn('Unable to remove the temporary notification group.'))
+  }
   if (!child || child.exitCode !== null || child.signalCode !== null) await rm(root, { recursive: true, force: true })
 }
