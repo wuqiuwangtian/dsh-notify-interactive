@@ -62,11 +62,11 @@ export function createPresenceReporter(options = {}) {
     post(active)
   }
 
-  function report() {
+  function report(force = false) {
     if (!started) return
     const now = Date.now()
     const nextBody = body(true)
-    if (nextBody === lastBody && now - lastReportAt < 1000) return
+    if (!force && nextBody === lastBody && now - lastReportAt < 1000) return
     lastBody = nextBody
     lastReportAt = now
     post(true)
@@ -92,7 +92,7 @@ export function createPresenceReporter(options = {}) {
     if (started) return
     started = true
     report()
-    timer = setInterval(report, intervalMs)
+    timer = setInterval(() => report(true), intervalMs)
     doc?.addEventListener('visibilitychange', onVisibility)
     globalThis.addEventListener('focus', onFocus)
     globalThis.addEventListener('blur', onBlur)

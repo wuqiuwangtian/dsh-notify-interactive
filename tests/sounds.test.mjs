@@ -107,3 +107,14 @@ test('player degrades when Web Audio is unavailable', () => {
   assert.equal(player.play('chime', 0.5), false)
   assert.equal(player.isReady(), false)
 })
+
+test('native WAV playback volume scales PCM amplitudes without changing the preset duration', () => {
+  function peak(volume) {
+    const wav = Buffer.from(renderPresetToDataUrl(getPreset('pulse'), volume).split(',')[1], 'base64')
+    let loudest = 0
+    for (let i = 44; i < wav.length; i += 2) loudest = Math.max(loudest, Math.abs(wav.readInt16LE(i)))
+    return loudest
+  }
+  assert.equal(peak(0), 0)
+  assert.ok(Math.abs(peak(1) / 2 - peak(0.5)) < 1)
+})

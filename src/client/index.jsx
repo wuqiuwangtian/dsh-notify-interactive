@@ -60,7 +60,7 @@ export function apply(ctx) {
     ? Array.from(globalThis.crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('')
     : `page-${Date.now()}-${Math.random().toString(36).slice(2)}`)
   const capability = globalThis.fetch('/dsh-notify-interactive/desktop-status', { cache: 'no-store' })
-    .then(response => response.json()).then(value => { coordinated = value.scope === 'reminders' }).catch(() => {})
+    .then(response => response.json()).then(value => { coordinated = value.scope === 'reminders'; return value }).catch(() => {})
   const notificationStore = createNotificationStore()
   const interactionBridge = createInteractionBridge({ clientId, resolveText,
     getStatus: () => ctx.get('uiSession')?.sessionStatus?.getSnapshot?.(),
@@ -137,7 +137,7 @@ export function apply(ctx) {
         keepalive: true,
       })?.then?.(async response => {
         const result = await response.json()
-        if (!response.ok || (!result.shown && !['suppressed', 'duplicate', 'queued'].includes(result.delivery))) {
+        if (!response.ok || (!result.shown && !['accepted', 'suppressed', 'duplicate', 'queued', 'sound-only', 'system-muted'].includes(result.delivery))) {
           console.warn('[dsh-notify-interactive] delivery not confirmed:', result.delivery ?? 'failed')
         }
         return result
@@ -212,15 +212,22 @@ export function apply(ctx) {
     const url = new URL(globalThis.location.href)
     const requestedSession = url.searchParams.get('dsh-notify-session')
     if (!requestedSession) return
+    const targetProfile = url.searchParams.get('dsh-notify-profile')
+    let verified = targetProfile === null // Older notifications only carried a session id.
+    if (!verified) void capability.then(status => {
+      verified = status?.profileId === targetProfile
+      if (!verified) console.warn('[dsh-notify-interactive] notification profile could not be verified')
+    })
     let attempts = 0
     const timer = setInterval(() => {
       attempts += 1
       try {
         const workspace = ctx.get('uiWorkspace')
         const list = ctx.get('sessions')?.list?.getSnapshot?.()
-        if (workspace && list?.byId?.[requestedSession]) {
+        if (verified && workspace && list?.byId?.[requestedSession]) {
           workspace.openSession(requestedSession)
           url.searchParams.delete('dsh-notify-session')
+          url.searchParams.delete('dsh-notify-profile')
           globalThis.history.replaceState(null, '', url)
           clearInterval(timer)
         }

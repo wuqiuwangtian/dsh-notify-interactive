@@ -114,3 +114,23 @@ test('native tool/result uses message.toolCallId and text blocks, preserving con
   c.observe(session, { type: 'tool/result', data: { message: { role: 'tool', toolCallId: 'native-call-2', content: [{ type: 'text', text: '{"answers":[]}' }] } } }, null)
   assert.equal(c.resolve(session.id, 'question'), undefined)
 })
+
+test('completion timing affects only visuals across focused conversations and windows', () => {
+  const c = createCoordinator()
+  c.present({ clientId: 'B', sessionId: 'B', focused: true, visible: true })
+  c.present({ clientId: 'A', sessionId: 'A', focused: false, visible: true })
+  assert.equal(c.attended(undefined), true)
+  assert.equal(c.attended('A'), false)
+  for (const [mode, same, other, outside] of [
+    ['always', true, true, true], ['session-away', false, true, true],
+    ['window-away', false, false, true], ['never', false, false, false],
+  ]) {
+    const s = mergeSettings(createDefaultSettings(), { popup: { completionMode: mode } })
+    for (const [attended, focused, visual] of [[true, true, same], [false, true, other], [false, false, outside]]) {
+      const result = channelPolicy(s, 'completion', attended, focused)
+      assert.equal(result.popup, visual)
+      assert.equal(result.sound, !attended)
+      assert.equal(channelPolicy(s, 'approval', attended, focused).popup, !attended)
+    }
+  }
+})

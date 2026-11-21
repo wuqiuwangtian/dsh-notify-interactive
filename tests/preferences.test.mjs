@@ -85,3 +85,19 @@ test('offline edits remain queued and become effective after reconnect', async (
     assert.equal(sync.getSnapshot(), 'synced')
   } finally { sync.stop() }
 })
+
+test('existing v3 profiles inherit session-away and preserve event audio when timing changes', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-notify-timing-'))
+  try {
+    const file = join(dir, 'settings.json')
+    await writeFile(file, JSON.stringify({ revision: 7, settings: {
+      version: 3, popup: { enabled: true }, scenarios: { approval: { preset: 'alert', sound: false } },
+    } }))
+    const host = createPreferences(file)
+    assert.equal((await host.snapshot()).settings.popup.completionMode, 'session-away')
+    await host.update(7, { popup: { completionMode: 'window-away' } })
+    const { settings } = await createPreferences(file).snapshot()
+    assert.equal(settings.popup.completionMode, 'window-away')
+    assert.deepEqual(settings.scenarios.approval, { notify: true, sound: false, preset: 'alert' })
+  } finally { await rm(dir, { recursive: true, force: true }) }
+})

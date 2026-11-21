@@ -15,7 +15,7 @@ export function createCoordinator({ now = Date.now, ttl = PRESENCE_TTL_MS } = {}
     while (peers.size > 64) peers.delete(peers.keys().next().value)
   }
   function attended(sessionId, since = 0) {
-    return [...peers.values()].some(peer => peer.at >= since && now() - peer.at <= ttl && peer.focused && peer.visible && String(peer.sessionId) === String(sessionId))
+    return [...peers.values()].some(peer => peer.at >= since && now() - peer.at <= ttl && peer.focused && peer.visible && (sessionId === undefined || String(peer.sessionId) === String(sessionId)))
   }
   function observe(session, event, message) {
     const sessionId = String(session.id)
@@ -81,7 +81,8 @@ export function createCoordinator({ now = Date.now, ttl = PRESENCE_TTL_MS } = {}
     return true
   }
   return { present, attended, observe, resolve, claim,
-    deliveredFor: sessionId => [...events.values()].filter(item => (sessionId === undefined || item.fact.sessionId === String(sessionId)) && ['claimed', 'rendered', 'queued', 'uncertain'].includes(item.status)).map(item => item.fact),
+    deliveredFor: sessionId => [...events.values()].filter(item => (sessionId === undefined || item.fact.sessionId === String(sessionId)) && ['claimed', 'rendered', 'queued', 'uncertain', 'accepted'].includes(item.status)).map(item => item.fact),
+    waiting: fact => events.get(fact.id)?.status === 'waiting',
     pending: fact => events.get(fact.id)?.status === 'waiting' && facts.get(keyOf(fact.sessionId, fact.kind))?.id === fact.id,
     finish(fact, status) { const item = events.get(fact?.id); if (item) item.status = status },
     active: () => [...peers.values()].some(peer => now() - peer.at <= ttl),

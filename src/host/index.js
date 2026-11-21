@@ -5,6 +5,7 @@
 import { join } from 'node:path'
 import { createPreferences } from './preferences.js'
 import { createCoordinator } from './coordinator.js'
+import { createToastTransport } from './windows-toast.js'
 import { channelPolicy, deliverNotification } from './delivery.js'
 import { createInteractionBroker } from './interactions.js'
 import { createCompanion, getCompanionStatus } from './companion.js'
@@ -101,11 +102,13 @@ function writeJson(res, status, value) {
  * @param {object} ctx Host Cordis context.
  */
 export function applyHost(ctx, services = {}) {
-  const deliver = services.deliver ?? deliverNotification
   const coordinator = createCoordinator()
   const timers = new Set()
   let profile
   try { profile = ctx.get?.('profileContext') ?? ctx.profileContext } catch { /* Profiles are optional in test/native embeddings. */ }
+  const nativeOrigin = services.nativeOrigin ?? process.env.DSH_NOTIFY_WINDOWS_ORIGIN
+  const native = nativeOrigin && profile?.dir ? createToastTransport(nativeOrigin, profile.dir) : null
+  const deliver = native?.deliver ?? services.deliver ?? deliverNotification
   const preferences = createPreferences(profile?.dir ? join(profile.dir, 'notify-interactive.settings.json') : undefined)
   let presentation = null
   function authorize(req, res) {
@@ -120,9 +123,9 @@ export function applyHost(ctx, services = {}) {
   }
 
   const lastNotify = new Map()
-  const companion = services.companion ?? createCompanion({ onEvent: event => {
+  const companion = services.companion ?? (native ? { dispose() {} } : createCompanion({ onEvent: event => {
     if (event.type === 'interaction') void interactions.submit(event).then(result => companion.interactionResult?.(event.id, event.actionId, result.status))
-  } })
+  } }))
   const interactions = createInteractionBroker({ coordinator,
     onUpdate: (eventId, view) => { void companion.updateInteraction?.(eventId, view) } })
   // Also allow an injected transport to exercise the identical command path.
@@ -192,6 +195,17 @@ export function applyHost(ctx, services = {}) {
         writeJson(res, status, result)
         return
       }
+      if (native) {
+        // Stale requests from older tabs must not open the former Windows surfaces.
+        if (kind !== 'demo-completion') { writeJson(res, 409, { shown: false, delivery: 'event-not-current' }); return }
+        const eventKind = kind.slice(5)
+        const { settings } = await preferences.snapshot()
+        const policy = channelPolicy(settings, eventKind)
+        const result = await native.deliver({ fact: { kind: eventKind, id: `demo-${Date.now()}`, sessionId },
+          payload: { sessionTitle: body.sessionTitle, title, body: text }, getPolicy: () => policy, isCurrent: () => true })
+        writeJson(res, 200, result)
+        return
+      }
       if (getCompanionStatus().enabled && ['completion', 'demo-completion', 'demo-approval', 'demo-question', 'demo-plan-review'].includes(kind) && requestedUrl) {
         const url = new URL(requestedUrl)
         url.searchParams.set('dsh-notify-session', sessionId)
@@ -233,7 +247,10 @@ export function applyHost(ctx, services = {}) {
       const next = await preferences.update(body.revision, body.patch, body.initial)
       if (!next.conflict) for (const fact of coordinator.deliveredFor()) {
         const policy = channelPolicy(next.settings, fact.kind)
-        if (!policy.popup) void companion.withdraw?.(fact.id)
+        if (!policy.popup) {
+          native?.retire(fact)
+          void companion.withdraw?.(fact.id)
+        }
         if (!policy.sound) void companion.silence?.(fact.id)
       }
       writeJson(res, next.conflict ? 409 : 200, next)
@@ -255,6 +272,10 @@ export function applyHost(ctx, services = {}) {
     }
   }
 
+  function eventPolicy(settings, fact) {
+    return channelPolicy(settings, fact.kind, coordinator.attended(fact.sessionId, fact.at), coordinator.attended(undefined, fact.at))
+  }
+
   async function dispatch(body, legacyClient = false) {
     if (typeof body.sessionId !== 'string' || !['approval', 'question', 'plan-review', 'completion'].includes(body.kind)) return { status: 400, shown: false, delivery: 'invalid-event' }
     const url = new URL(body.url)
@@ -262,10 +283,15 @@ export function applyHost(ctx, services = {}) {
     const fact = coordinator.resolve(body.sessionId, body.kind, body.callId)
     if (!fact) return { status: 409, shown: false, delivery: 'event-not-current' }
     presentation = { theme: body.theme ?? {}, url: body.url, openLabel: body.openLabel, closeLabel: body.closeLabel }
-    if (coordinator.attended(body.sessionId) && !coordinator.attended(body.sessionId, fact.at)) await new Promise(resolve => setTimeout(resolve, 1100))
+    const focusTarget = fact.kind === 'completion' && preferences.current().popup.completionMode === 'window-away' ? undefined : body.sessionId
+    // A newly foreground tab may not have posted its first view change yet.
+    const grace = fact.at + 1250 - Date.now()
+    if (grace > 0 && (native || coordinator.attended(focusTarget)) && !coordinator.attended(focusTarget, fact.at)) {
+      await new Promise(resolve => setTimeout(resolve, grace))
+    }
     const { settings } = await preferences.snapshot()
     if (!coordinator.claim(fact)) return { status: 200, shown: false, delivery: 'duplicate' }
-    const policy = channelPolicy(settings, body.kind, coordinator.attended(body.sessionId, fact.at))
+    const policy = eventPolicy(settings, fact)
     if (legacyClient && body.silent) policy.sound = false
     url.searchParams.set('dsh-notify-session', body.sessionId)
     const sessionTitle = truncate(body.sessionTitle ?? '', 200)
@@ -273,8 +299,8 @@ export function applyHost(ctx, services = {}) {
     const prefix = `${sessionTitle} · `
     const result = await deliver({ fact, companion, available: services.available ?? getCompanionStatus().enabled,
       legacy, policy, getInteraction: () => interactions.presentation(fact.id),
-      getPolicy: () => { const value = channelPolicy(preferences.current(), body.kind, coordinator.attended(body.sessionId, fact.at)); if (legacyClient && body.silent) value.sound = false; return value },
-      isCurrent: () => coordinator.resolve(body.sessionId, body.kind, body.callId)?.id === fact.id,
+      getPolicy: () => { const value = eventPolicy(preferences.current(), fact); if (legacyClient && body.silent) value.sound = false; return value },
+      isCurrent: () => (native && fact.kind === 'completion') || coordinator.resolve(body.sessionId, body.kind, body.callId)?.id === fact.id,
       payload: { eventId: fact.id, interaction: interactions.presentation(fact.id), sticky: body.kind !== 'completion', title: truncate(body.title ?? 'DSH', 80), sessionTitle,
         body: sessionTitle && text.startsWith(prefix) ? text.slice(prefix.length) : text,
         url: url.href, theme: body.theme ?? {}, openLabel: truncate(body.openLabel ?? 'DSH', 80), closeLabel: truncate(body.closeLabel ?? 'Close', 80), webPopup: body.webPopup === true },
@@ -302,7 +328,7 @@ export function applyHost(ctx, services = {}) {
         if (!authorize(req, res)) return
         if (req.method !== 'GET') { res.writeHead(405); res.end(); return }
         res.setHeader?.('cache-control', 'no-store')
-        writeJson(res, 200, getCompanionStatus())
+        writeJson(res, 200, native ? { scope: 'reminders', enabled: true, available: existsSync(WSL_POWERSHELL), native: true, profileId: native.profileId } : getCompanionStatus())
       },
     }), 'dsh-notify-interactive: desktop status')
     scope.effect(() => scope.webServer.register({
@@ -322,14 +348,20 @@ export function applyHost(ctx, services = {}) {
     const message = messageForEvent(session, event)
     const fact = coordinator.observe(session, event, message)
     interactions.observe(fact)
-    for (const old of before) if (coordinator.resolve(session.id, old.kind)?.id !== old.id) { void companion.withdraw?.(old.id); void companion.silence?.(old.id) }
+    for (const old of before) {
+      if (coordinator.resolve(session.id, old.kind)?.id === old.id) continue
+      native?.retire(old)
+      void companion.withdraw?.(old.id)
+      void companion.silence?.(old.id)
+    }
     if (!fact) return
     const timer = setTimeout(async () => {
       timers.delete(timer)
-      if (!coordinator.pending(fact)) return
+      const keepCompletion = native && fact.kind === 'completion'
+      if (!(keepCompletion ? coordinator.waiting(fact) : coordinator.pending(fact))) return
       try {
         const { settings } = await preferences.snapshot()
-        const policy = channelPolicy(settings, message.kind, coordinator.attended(session.id, fact.at))
+        const policy = eventPolicy(settings, fact)
         if (!coordinator.claim(fact)) return
         const base = presentation?.url || process.env.DSH_WEB_URL || ''
         const url = base ? new URL(base) : null
@@ -340,8 +372,8 @@ export function applyHost(ctx, services = {}) {
         const result = await deliver({ fact, companion, policy,
           available: Boolean(presentation) && (services.available ?? getCompanionStatus().enabled),
           legacy, payload, getInteraction: () => interactions.presentation(fact.id),
-          getPolicy: () => channelPolicy(preferences.current(), message.kind, coordinator.attended(session.id, fact.at)),
-          isCurrent: () => coordinator.resolve(session.id, message.kind)?.id === fact.id })
+          getPolicy: () => eventPolicy(preferences.current(), fact),
+          isCurrent: () => keepCompletion || coordinator.resolve(session.id, message.kind)?.id === fact.id })
         coordinator.finish(fact, result.delivery)
       } catch { console.warn('[dsh-notify-interactive] host delivery failed') }
     }, services.deliveryDelayMs ?? 1800)

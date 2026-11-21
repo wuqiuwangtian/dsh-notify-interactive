@@ -6,7 +6,7 @@ DSH Web 会话提醒插件。未关注事件所属会话时提醒；正在看该
 
 ## 当前开发状态
 
-2026-11-21 已确定迁移为 Windows 原生通知，支持从通知中心找回提醒。下文描述可运行的旧实现；隔离实例的原生完成通知及 Win+N 回会话已通过实机验收，迁移阶段见[需求与计划](docs/requirements.md)。
+2026-11-21 已确定迁移为 Windows 原生通知，支持从通知中心找回提醒。Windows 原生预览已支持四类提醒、完成时机四档、独立音效和通知中心回会话。用 `pnpm native:acceptance --windows-toast --host <WSL-IPv4> --port <空闲端口>` 在隔离实例体验。开发版宿主可通过 `DSH_NOTIFY_WINDOWS_ORIGIN` 指定 Windows 可达的 Web origin 启用此通道，例如 `http://<WSL-IPv4>:3080`（仅协议、主机、端口）。预览通知点击后进入 Web，原生作答按钮属于下一阶段。下文描述默认运行的旧实现。[阶段 2 验收与限制](docs/verification.md#15-四类原生通知与历史管理)
 
 P3 应答桥接开发代码，目标 DSH 0.2.2-rc.1；package 版本仍为 0.2.1，新增能力尚未发布。
 

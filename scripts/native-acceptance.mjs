@@ -7,12 +7,12 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { isIP } from 'node:net'
-import { removePreviewHistory } from './windows/completion-toast.mjs'
+import { removePreviewHistory } from '../src/host/windows-toast.js'
 import { createPreferences } from '../src/host/preferences.js'
 
 const args = process.argv.slice(2)
 if (args.includes('--help')) {
-  console.log('pnpm native:acceptance [--host <local-IP>] [--port <port>] [--timed] [--windows-toast] [--desktop-debug-port <port>]\nWindows toast preview requires --host and a fixed --port, uses silent native completion notifications and ignores other events. Creates a temporary home, silent settings and a local no-network adapter; Ctrl+C cleans up. Optional DSH_NOTIFY_DSH_BIN selects the launcher.')
+  console.log('pnpm native:acceptance [--host <local-IP>] [--port <port>] [--timed] [--windows-toast] [--desktop-debug-port <port>]\nWindows toast preview requires --host and a fixed --port, uses native notifications with sound initially off. Creates a temporary home, silent settings and a local no-network adapter; Ctrl+C cleans up. Optional DSH_NOTIFY_DSH_BIN selects the launcher.')
   process.exit(0)
 }
 const value = name => args.includes(name) ? args[args.indexOf(name) + 1] : undefined
@@ -60,13 +60,8 @@ try {
   if (debugPort) host = `import{applyHost}from ${JSON.stringify(hostUrl)}; import{createCompanion,resolveCompanionLaunch}from ${JSON.stringify(new URL('../src/host/companion.js', import.meta.url).href)};export function apply(ctx){let submit;const companion=createCompanion({launch(){const c=resolveCompanionLaunch();return {...c,args:[...c.args,'--remote-debugging-port=${debugPort}','--remote-debugging-address=127.0.0.1']}},onEvent(e){if(e.type==='interaction')void submit(e).then(r=>companion.interactionResult(e.id,e.actionId,r.status))}});companion.onInteraction=handler=>{submit=handler};applyHost(ctx,{companion})}\n`
   if (windowsToast) {
     const origin = new URL(`http://${address}:${port}`).origin
-    const adapter = new URL('./windows/completion-toast.mjs', import.meta.url).href
     host = `import {applyHost} from ${JSON.stringify(hostUrl)}
-import {createToastDelivery} from ${JSON.stringify(adapter)}
-export function apply(ctx) {
-  applyHost(ctx, { deliver: createToastDelivery(${JSON.stringify(origin)}, ${JSON.stringify(profile)}),
-    companion: { dispose() {} }, available: false, legacy: () => false })
-}
+export function apply(ctx) { applyHost(ctx, { nativeOrigin: ${JSON.stringify(origin)} }) }
 `
   }
   await writeFile(join(wrapper, 'host.mjs'), host)
@@ -74,11 +69,25 @@ export function apply(ctx) {
   await symlink(fixture, join(profile, 'node_modules/notify-native-fixture'))
   const env = Object.fromEntries(['PATH', 'HOME', 'SHELL', 'LANG', 'TERM', 'WSL_INTEROP', 'WSL_DISTRO_NAME', 'USER', 'LOGNAME', 'TMPDIR', 'XDG_RUNTIME_DIR'].filter(key => process.env[key]).map(key => [key, process.env[key]]))
   console.log(`Isolated DSH home: ${root}\nTest workspace: ${join(root, 'workspace')}\nSelect notify-fixture approval/question/plan/completion. For plan, use /plan on. Use another conversation to test desktop delivery. ${args.includes('--timed') ? 'Questions continue after one second.' : 'Questions block until answered.'}`)
-  child = spawn(process.execPath, [binary, '--profile', 'web', '--no-open', '--port', String(port), ...(value('--host') ? ['--host', value('--host')] : [])], { cwd: root, env: { ...env, DSH_HOME: root }, stdio: 'inherit' })
-  const stop = () => child.kill('SIGTERM')
-  process.on('SIGINT', stop); process.on('SIGTERM', stop)
-  process.exitCode = await new Promise((done, reject) => { child.once('error', reject); child.once('exit', code => done(code ?? 0)) })
-  process.off('SIGINT', stop); process.off('SIGTERM', stop)
+  let restartRequested = false
+  let stopping = false
+  const stop = () => { stopping = true; child?.kill('SIGTERM') }
+  const restart = () => { restartRequested = true; child?.kill('SIGTERM') }
+  process.on('SIGINT', stop)
+  process.on('SIGTERM', stop)
+  process.on('SIGHUP', restart)
+  try {
+    do {
+      restartRequested = false
+      child = spawn(process.execPath, [binary, '--profile', 'web', '--no-open', '--port', String(port), ...(address ? ['--host', address] : [])],
+        { cwd: root, env: { ...env, DSH_HOME: root }, stdio: 'inherit' })
+      process.exitCode = await new Promise((done, reject) => { child.once('error', reject); child.once('exit', code => done(code ?? 0)) })
+    } while (restartRequested && !stopping)
+  } finally {
+    process.off('SIGINT', stop)
+    process.off('SIGTERM', stop)
+    process.off('SIGHUP', restart)
+  }
 } finally {
   if (windowsToast && child) {
     await removePreviewHistory(profile).catch(() => console.warn('Unable to remove the temporary notification group.'))

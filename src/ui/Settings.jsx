@@ -1,6 +1,6 @@
 import { createElement as h, useEffect, useState } from 'react'
 import { runtime } from '../client/runtime.js'
-import { SOUND_PRESET_IDS, SCENARIO_KEYS } from '../state/settings.js'
+import { SOUND_PRESET_IDS, SCENARIO_KEYS, COMPLETION_MODES } from '../state/settings.js'
 import { useStore } from './useStore.js'
 import { useLocale } from './locale.js'
 import {
@@ -38,6 +38,7 @@ export function Settings() {
     return () => { active = false }
   }, [])
   const desktopStatusKey = desktop === null ? 'desktopLoading'
+    : desktop.native && desktop.available ? 'desktopNative'
     : desktop.reason === 'host-unavailable' ? 'desktopHostUnavailable'
       : desktop.mode === 'disabled' ? 'desktopDisabled'
         : !desktop.available ? 'desktopMissing' : 'desktopReady'
@@ -50,10 +51,11 @@ export function Settings() {
         kind: 'demo-completion', sessionId: main.id ?? 'demo-session',
         title: t('settings.demoWindowsTitle'), body: t('settings.demoWindowsCompletion'), silent: !settings.sound.enabled,
       })
-      setDesktopTest(result?.delivery === 'rendered' ? 'desktopDelivered'
+      const nativeStatus = { accepted: 'nativeAccepted', 'sound-only': 'nativeSound', 'system-muted': 'nativeMuted', suppressed: 'nativeSuppressed' }
+      setDesktopTest(nativeStatus[result?.delivery] ?? (result?.delivery === 'rendered' ? 'desktopDelivered'
         : result?.delivery === 'queued' ? 'desktopQueued'
           : result?.delivery === 'uncertain' ? 'desktopUncertain'
-          : result?.delivery === 'process-started' ? 'desktopLegacy' : 'desktopFailed')
+          : result?.delivery === 'process-started' ? 'desktopLegacy' : 'desktopFailed'))
     } catch { setDesktopTest('desktopFailed') }
   }
 
@@ -142,7 +144,7 @@ export function Settings() {
 
     warnings.map((warning, index) => h('div', { key: `warning-${index}`, className: 'dni-warning' }, warning)),
 
-    h('div', { className: 'dni-statusbar' },
+    !desktop?.native && h('div', { className: 'dni-statusbar' },
       h(Badge, { tone: popup.open ? 'success' : 'neutral' },
         `${t('settings.popup')}: ${popup.open ? t('settings.popupOpenState') : t('settings.popupClosedState')}`),
       h(Badge, { tone: audioReady ? 'success' : 'warn' },
@@ -209,6 +211,11 @@ export function Settings() {
         checked: settings.popup.enabled, label: t('settings.popupEnabled'),
         onChange: value => update({ popup: { enabled: value } }),
       }))),
+      h(Field, { label: t('settings.completionTiming') }, h(Select, {
+        value: settings.popup.completionMode, label: t('settings.completionTiming'),
+        options: COMPLETION_MODES.map(value => ({ value, label: t(`settings.timing.${value}`) })),
+        onChange: completionMode => update({ popup: { completionMode } }),
+      })),
       h('div', { className: 'dni-scenarios-wrap' }, h('table', { className: 'dni-scenarios' },
         h('thead', null, h('tr', null,
           h('th', { scope: 'col' }, t('settings.event')),
@@ -245,7 +252,7 @@ export function Settings() {
       desktopTest !== null ? h('p', { className: 'dni-hint', role: 'status' }, t(`settings.${desktopTest}`)) : null,
     ),
 
-    h(Section, { title: t('settings.popup') },
+    !desktop?.native && h(Section, { title: t('settings.popup') },
       h(Field, { label: t('settings.popupAvailability'), hint: t('settings.popupHint') },
         h('div', { className: 'dni-inline' },
           h(Button, {
@@ -276,7 +283,7 @@ export function Settings() {
         : null,
     ),
 
-    h(Section, { title: t('settings.tests') },
+    !desktop?.native && h(Section, { title: t('settings.tests') },
       h('div', { className: 'dni-test-grid' },
         h(Button, { variant: 'outline', size: 'sm', onClick: () => addDemo('approval') },
           h(AlertIcon, { size: 14 }), t('settings.testApproval')),

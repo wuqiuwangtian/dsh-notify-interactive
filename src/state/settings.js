@@ -4,6 +4,17 @@ export const SETTINGS_KEY = 'dsh.notify-interactive.settings.v2'
 export const SOUND_PRESET_IDS = Object.freeze(['chime', 'pulse', 'complete', 'soft', 'alert', 'none'])
 export const SCENARIO_KEYS = Object.freeze(['approval', 'question', 'planReview', 'completion'])
 
+export const COMPLETION_MODES = Object.freeze(['always', 'session-away', 'window-away', 'never'])
+
+export function visualAllowed(kind, mode, attended, windowFocused) {
+  if (kind === 'completion') {
+    if (mode === 'always') return true
+    if (mode === 'never') return false
+    if (mode === 'window-away') return !windowFocused
+  }
+  return !attended
+}
+
 const DEFAULT_PRESET = 'chime'
 
 /** Full default settings. Callers receive a fresh object. */
@@ -11,7 +22,7 @@ export function createDefaultSettings() {
   return {
     version: 3,
     enabled: true,
-    popup: { enabled: true },
+    popup: { enabled: true, completionMode: 'session-away' },
     sound: {
       enabled: true,
       preset: DEFAULT_PRESET,
@@ -72,7 +83,10 @@ export function normalizeSettings(raw) {
   return {
     version: 3,
     enabled: bool(value.enabled, true),
-    popup: { enabled: bool(value.popup?.enabled, true) },
+    popup: {
+      enabled: bool(value.popup?.enabled, true),
+      completionMode: COMPLETION_MODES.includes(value.popup?.completionMode) ? value.popup.completionMode : 'session-away',
+    },
     sound: {
       enabled: bool(sound.enabled, true),
       preset: presetOf(sound.preset),

@@ -1,3 +1,5 @@
+import { visualAllowed } from '../state/settings.js'
+
 /**
  * Pure gates shared by the engine and the cards.
  * Keeping these pure makes the "do not disturb" rules testable without a DOM.
@@ -76,6 +78,6 @@ export function gateChannels({
   return {
     attended,
     sound: enabled && settings?.sound?.enabled !== false && scenario.sound !== false,
-    notify: enabled && settings?.popup?.enabled !== false && scenario.notify !== false,
+    notify: settings?.enabled !== false && visualAllowed(scenarioKey, settings?.popup?.completionMode, attended, focused && visibility === 'visible') && settings?.popup?.enabled !== false && scenario.notify !== false,
   }
 }

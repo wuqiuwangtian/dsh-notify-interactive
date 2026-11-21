@@ -32,9 +32,10 @@ function bytesToBase64(bytes) {
 /**
  * Render one preset to a `data:audio/wav;base64,...` URL.
  * @param {{ id: string, notes: Array<{ freq: number, start: number, duration: number, gain: number }> }} preset
+ * @param {number} [volume] amplitude for native players without a volume control.
  * @returns {string} a playable WAV data URL, or an empty string for silence.
  */
-export function renderPresetToDataUrl(preset) {
+export function renderPresetToDataUrl(preset, volume = 1) {
   const notes = Array.isArray(preset?.notes) ? preset.notes : []
   if (notes.length === 0) return ''
   const duration = Math.max(...notes.map((note) => note.start + note.duration), 0) + 0.06
@@ -54,7 +55,7 @@ export function renderPresetToDataUrl(preset) {
 
   let peak = 0
   for (const sample of samples) peak = Math.max(peak, Math.abs(sample))
-  const normalize = peak > 0 ? 0.92 / peak : 0
+  const normalize = peak > 0 ? 0.92 * Math.min(1, Math.max(0, volume)) / peak : 0
 
   const buffer = new ArrayBuffer(44 + length * 2)
   const view = new DataView(buffer)
