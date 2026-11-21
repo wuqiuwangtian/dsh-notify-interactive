@@ -4,11 +4,7 @@
 
 ## 项目定位
 
-`dsh-notify-interactive` 的目标是未聚焦事件所属会话时，自动提供 DSH 风格提醒；覆盖审批、提问/计划和一轮结束，弹窗/音效独立配置，基础兼容 Windows 与 Linux。
-
-2026-11-09：已授权开始 P0 调查与开发。0.2.1 仍是受限实现，尚未完成基础体验；不要将旧“第一阶段完成”当成验收结论。有效目标、待定方案和 P0–P5 计划见 `docs/requirements.md`；现状证据见 `docs/research.md`。
-
-P2 已提供统一投递与 profile 设置；P3 开发代码增加 Windows 桌面人工应答桥接，需要在线且已认证的 Web 页面持有当前 Pending。真实用户会话与 Linux 原生桌面未验收；用户继续使用浏览器并接受辅助程序，不要求换客户端。本轮重点为 Arch WSL DSH Web → Windows；TUI 与 DSH Desktop 不扩展。辅助程序安装后自动启用，`DSH_NOTIFY_COMPANION=0` 强制回退。
+Windows 路线于 2026-11-21 改为原生应用通知，首轮为 Arch WSL DSH Web → Windows 通知中心。实施顺序与门槛见 `docs/requirements.md` 第 5 节。下文的 Electron、PowerShell 与旧冒烟记录用于理解迁移起点。默认按事件所属会话静默，四类事件的通知与声音分别配置。复杂交互回 DSH Web。
 
 ## 关键约束
 
@@ -16,10 +12,8 @@ P2 已提供统一投递与 profile 设置；P3 开发代码增加 Windows 桌�
 - **不写 session log**：不 append 事件、不注册模型工具、不注入 prompt。
 - **不监听 approval/question waterfall**：宿主只观察 `session/event`，不改变审批链。
 - **不要重新加回页内通知卡片**；如果产品要求变化，先读需求文档。
-- **不要未经方案确认重新加浏览器 Notification 通道**；当前 Windows 兜底由宿主 PowerShell 负责，目标 Linux 系统通知需另做适配。
-- **样式只用主题 token**：`--dsw-*` / `--dsh-*` / `--ds-*`；弹窗通过 `src/ui/theme.js` 复制主文档解析值。
-- **UI 自查**：每次 UI 修改后实际查看渲染效果，删除不影响阅读、判断和操作的内容；完成提醒仅保留会话标题（有数据时）、正文、关闭和跳转，无系统标题栏/菜单/重复标题。
-- **极简 UI**：卡片只保留标题、必要上下文、会话入口和操作；不要加图标、副标题、后端徽标、页脚提示等非操作内容。
+- Windows 目标只投递原生通知。迁移时退役 WinForms 和自绘窗；通道失败在设置页提供诊断。浏览器 Notification 和页内卡片不作为备用通道。
+- Windows 通知使用系统模板；Web 设置页样式沿用 DSH 主题 token。UI 变更后实际查看渲染效果；原生通知还须在真实横幅和通知中心检查。
 - **产物提交**：`lib/client.js` 由 `src/` 构建，必须同步提交；CI 会 `git diff --exit-code`。
 
 ## 当前实现架构（不代表目标方案）

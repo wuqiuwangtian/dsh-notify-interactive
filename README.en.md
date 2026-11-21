@@ -6,6 +6,8 @@ DSH Web reminders: stay silent while attending the relevant conversation, otherw
 
 ## Development status
 
+The November 21 plan moves Windows delivery to native app notifications with Notification Center history. The implementation described below predates this migration. See the [current roadmap](docs/requirements.md).
+
 P3 answer-bridge development code targeting DSH 0.2.2-rc.1. Package version remains 0.2.1; these changes are unreleased.
 
 Approvals, questions, plan reviews and completion share host delivery claims. Linked requests support Allow once/Reject, full question batches, single/multiple choices, custom text and explicit skipping. Plan reviews retain the original options and full plan. Popups and sound have independent global/per-event controls and presets. Preferences migrate to the current profile with revision-based merging; offline edits remain queued.
