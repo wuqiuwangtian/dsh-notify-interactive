@@ -1,77 +1,19 @@
 # AGENTS.md
 
-面向接手本仓库的 agent / 开发者。先读 `docs/requirements.md` 与 `docs/verification.md`。
+先读 `docs/requirements.md` 与 `docs/verification.md`。0.3.0 为本地候选版本，Windows 原生通知是正式投递通道。当前验收环境为 Arch WSL、Windows 11 和 DSH Web 0.2.2-rc.5。
 
-## 项目定位
+## 实现约束
 
-Windows 路线于 2026-11-21 改为原生应用通知，首轮为 Arch WSL DSH Web → Windows 通知中心。实施顺序与门槛见 `docs/requirements.md` 第 5 节。下文的 Electron、PowerShell 与旧冒烟记录用于理解迁移起点。可选原生通道入口为 `src/host/windows-toast.js`。阶段 3 的按钮绑定与失效见 `src/host/toast-actions.js`；Windows 激活回调使用随 build 打包的 `ToastActivator.cs`、`register-toast.ps1` 和 `notification.ps1`。默认按事件所属会话静默，四类事件的通知与声音分别配置。复杂交互回 DSH Web。
+- 宿主只观察 `session/event`。保持 DSH 认证和 owner 检查，禁止写 session log、注册模型工具、注入 prompt 或监听审批／提问 waterfall。
+- Windows 通知正文回会话。快捷按钮必须由用户显式触发，经宿主和在线页面复核实例、会话、事件、原 Pending 对象、内容和状态，只交付一次。超时和重连不重放。
+- 保持每个事件独立的通知／声音开关和音效。默认焦点规则、完成时机、已完成轮次历史和待处理条目撤回见需求第 2 节。
+- Windows 目标地址取 DSH 的 `webServer.getOrigin()` 或显式配置的可信 origin。禁止从请求正文或未经验证的请求头生成激活地址。
+- 不添加页内卡片、浏览器通知窗、WinForms 或 Electron 回退。设置页使用 DSH 主题 token，界面修改后核对实际渲染；原生通知须区分 Windows 接受、历史出现和用户操作。
 
-## 关键约束
+## 代码与验证
 
-- **不自动作答**：只能通过用户在 DSH 或交互弹窗中的显式操作提交；系统兜底只提醒。独立桌面应答接口需先验证，不假定可用。
-- **不写 session log**：不 append 事件、不注册模型工具、不注入 prompt。
-- **不监听 approval/question waterfall**：宿主只观察 `session/event`，不改变审批链。
-- **不要重新加回页内通知卡片**；如果产品要求变化，先读需求文档。
-- Windows 目标只投递原生通知。迁移时退役 WinForms 和自绘窗；通道失败在设置页提供诊断。浏览器 Notification 和页内卡片不作为备用通道。
-- Windows 通知使用系统模板；Web 设置页样式沿用 DSH 主题 token。UI 变更后实际查看渲染效果；原生通知还须在真实横幅和通知中心检查。
-- **产物提交**：`lib/client.js` 由 `src/` 构建，必须同步提交；CI 会 `git diff --exit-code`。
+`src/client/` 提供 presence、设置同步及 Pending 所有者，`src/engine/` 观察 Web 快照变化，`src/host/` 处理事件认领、聚焦、profile 持久化和 Windows 投递。原生回调使用 `ToastActivator.cs` 与 `toast-actions.js`；清除或关闭通知不得生成回答。通知 group 按 profile 和 WSL 发行版隔离。保留历史 AUMID 和现有 localStorage 键以承接升级。
 
-## 当前实现架构（不代表目标方案）
+`pnpm verify` 包括构建、语法、单元测试和中英文设置页渲染。构建后同步提交 `lib/`。用 `pnpm native:acceptance` 创建隔离实例，可用 `--bundle` 指定实际包。实际安装、演示、禁用、旧版清理和完整卸载见 README。日常 profile 验收优先使用设置页测试，不向用户会话发测试 prompt。
 
-- `src/client/`：Web 半区。观察 `uiSession.sessionStatus` + `sessions.list`；维护通知引擎；上报 presence；管理交互弹窗。
-- `src/host/`：宿主统一事件认领、attention/presence 聚合、profile 设置与桌面投递；connection owner 认证保护路由；没有成功投递的 Web 在线状态不阻止宿主延迟接管。
-- `src/ui/`：设置页 + 极简弹窗卡片。
-- `src/state/`：设置、通知队列、弹窗控制器、surface 标志。
-- `src/audio/`：Web Audio 合成 + WAV 兜底。
-- `companion/`：Electron 提醒窗口/交互表单/队列；由 `src/host/companion.js` 使用连接隔离文件邮箱管理，正式路径不开放额外端口。
-- 文件邮箱不是 FIFO；交互状态按 interactionRevision 比较，早到的更新必须保留到对应 deliver。不要以 readdir 顺序推断新旧，也不要让旧更新覆盖断线/禁用状态。
-- `src/host/interactions.js` + `src/client/interactions.js` + `src/interaction/schema.js`：将显式动作交给唯一在线 Web Pending 所有者；只交付一次，复核实例/会话/请求/对象/key/状态。审批缺 callId、重复或元数据不匹配时只提醒；阻塞式提问可按完整批次唯一匹配，计划从 intent.callId 关联；歧义请求只提醒。
-- `src/client/preferences.js` 与 `src/host/preferences.js`：schema v3 的 localStorage 首次迁移与 profile 原子持久化，revision 冲突只重放局部修改。
-- `pnpm coordination:smoke`：真实 Windows 通道组合/去重/排队/宿主接管，mock 的仅是 DSH 上下文与 owner admission，不等同真实登录会话。
-- `pnpm interaction:smoke`：真实 Windows renderer 按钮 + 构建后 Host + 模拟 Web Pending；只为该独立测试进程临时开启 loopback DevTools，结束清理。截图位于 /tmp；不能把模拟应答说成真实用户请求通过。
-- `pnpm native:acceptance`：创建临时 DSH home/profile、独立凭据和本地确定性适配器，触发原生审批及内置提问/计划工具；不读取用户凭据、不请求外部模型、不新增模型工具或 waterfall 监听、不 append 日志。Ctrl+C 清理，默认关闭声音；`--timed` 验证 continued，只有显式 `--desktop-debug-port` 才为测试组件开 loopback DevTools。真实原生验收与用户日常实例仍须区分，见 verification 第 13 节。
-- `pnpm companion:install` 在 WSL 下载并复制 Windows 运行时至 LocalAppData（需要 Node >=22.12）；不要提交二进制或 `.runtime.json`。改窗口文件后需重新 staging，详见 verification。
-
-## 构建与验证
-
-```sh
-pnpm install
-pnpm verify      # build + node --check + node --test + render smoke
-```
-
-- 根开发依赖为 `esbuild` + React/ReactDOM；独立 `companion/package.json` 固定 Electron 开发依赖，仅显式运行安装器时下载。
-- `pnpm-workspace.yaml` 的 `allowBuilds.esbuild: true` 是 pnpm 12 运行 esbuild 安装脚本所必需。
-- 测试覆盖：设置、diff/引擎、提问答案、音效/WAV、host 文案与 presence 策略、surface 标志、i18n。
-- `tests/render-entry.jsx` 用 `react-dom/server` 渲染设置页和弹窗卡片；用于捕获 JSX/hook/undefined 组件错误。
-- 视觉、真实审批/提问、Windows PowerShell 弹窗、CLI/TUI 端到端无法自动验证；按 `docs/verification.md` 手工验收。
-
-## 安装
-
-在 DSH 会话中优先用 `plugin_manager` 的 `install_bundle`，target 为仓库绝对路径。安装后刷新页面；若返回 `restart-required`，需要重启 DSH。
-
-## 发布
-
-1. 更新 `CHANGELOG.md` 与 `package.json` 版本。
-2. `pnpm verify`。
-3. 提交；`pnpm pack`，把 tgz 附加到 GitHub Release；更新 `README` 的 tgz 名称。
-4. `gh repo edit --add-topic dsh --add-topic dsh-plugin --add-topic deepseek-harness --add-topic notifications`。
-
-## 关键 API 事实（DSH 0.2.2-rc.1）
-
-- `ctx.uiSession.sessionStatus`：`{ getSnapshot, subscribe }`，快照 `Map<SessionId, { running, pendingInteraction, completionUnread }>`。
-- `ctx.sessions.list`：`{ getSnapshot, subscribe }`，快照含 `ids`、`byId[id].displayTitle/origin/retainedBy`。
-- `pendingInteraction.kind`：`'approval'`（`PendingApproval`）或 `'question' | 'plan-review'`（`PendingQuestion`）。
-- `PendingApproval.answer('allowed-once' | 'rejected')`。
-- `PendingQuestion.answer({ answers: [{ id, selected, custom? }] })`；`channel` 为 `waterfall` / `rpc` / `none`；`snapshot().countdown`；`holdFocus`/`releaseFocus`/`engage`/`takeTime`。
-- `ctx.uiWorkspace.openSession(sessionId)`。
-- 宿主 `session/event`：`approval/asked`、`tool/call`（`ask_user_question` / `exit_plan_mode`）、`turn/end`；`session.header.cwd/origin`。
-- 原生 `tool/result` 的关联在 `data.message.toolCallId`，`message.content` 为文本块数组；不能只按模拟的 `data.callId`/字符串解析。`user/message` 的 `source` 则直接在 `data.source`。legacy 阻塞提问没有 Pending.callId，计划的工具 ID 在唯一问题的 intent.callId。
-- 宿主 `ctx.webServer.register({ kind: 'exact', path, handler })`。
-- `react-dom/client` 在 `dsh-web-frontend` 的 static modules 中可用。
-- Document PiP：`window.documentPictureInPicture.requestWindow({ width, height })`，需要用户手势；不支持时 `window.open`。
-
-## 诊断
-
-- 页面加载后 `globalThis.__dshNotifyInteractive` 暴露 runtime：`openPopup()`、`closePopup()`、`addDemo(kind)`、`windowsFallback(payload)`、`getMainSession()`、`settingsStore`、`notificationStore`、`popupController`。
-- 设置页可测试三类交互卡片和 Windows 兜底。
-- 宿主 Windows 弹窗使用 PowerShell WinForms（不是 `WScript.Shell.Popup`）；路径检测：Windows `powershell.exe`，WSL `/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe`。
+发布前检查版本、CHANGELOG、`pnpm pack` 和包安装。远端推送和发布另按授权执行。

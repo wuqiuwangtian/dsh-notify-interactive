@@ -2,67 +2,18 @@
  * It only observes session/event; no answer waterfall is registered or intercepted.
  */
 
+import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { createPreferences } from './preferences.js'
 import { createCoordinator } from './coordinator.js'
-import { createToastTransport } from './windows-toast.js'
-import { channelPolicy, deliverNotification } from './delivery.js'
+import { createToastTransport, notificationProfileId, windowsShell } from './windows-toast.js'
+import { channelPolicy } from './delivery.js'
 import { createInteractionBroker } from './interactions.js'
-import { createCompanion, getCompanionStatus } from './companion.js'
-import { renderPresetToDataUrl } from '../audio/wav.js'
-import { SOUND_PRESETS } from '../audio/sounds.js'
-import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { messageForEvent, popupPayload, popupScript, truncate } from './logic.js'
+import { messageForEvent, truncate } from './logic.js'
 
 const PRESENCE_PATH = '/dsh-notify-interactive/presence'
 const WINDOWS_PATH = '/dsh-notify-interactive/windows-notify'
-const WSL_POWERSHELL = '/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe'
-const NOTIFY_COOLDOWN_MS = 2000
-
-let warnedMissingPowerShell = false
-
-function resolvePowerShell() {
-  if (process.platform === 'win32') return 'powershell.exe'
-  if (existsSync(WSL_POWERSHELL)) return WSL_POWERSHELL
-  return undefined
-}
-
-/** Show one native WinForms reminder. Detached so the host never waits. */
-function showWindowsPopup(title, body, silent = false, url = '', popup = true) {
-  const executable = resolvePowerShell()
-  if (executable === undefined) {
-    if (!warnedMissingPowerShell) {
-      warnedMissingPowerShell = true
-      console.warn('[dsh-notify-interactive] Windows popup fallback unavailable: PowerShell was not found.')
-    }
-    return false
-  }
-  try {
-    const script = popupScript(popupPayload(
-      title,
-      body,
-      silent,
-      typeof url === 'string' && url !== '' ? url : (process.env.DSH_WEB_URL ?? ''), popup,
-    ))
-    const encoded = Buffer.from(script, 'utf16le').toString('base64')
-    const child = spawn(executable, [
-      '-NoProfile',
-      '-WindowStyle',
-      'Hidden',
-      '-EncodedCommand',
-      encoded,
-    ], {
-      detached: true,
-      stdio: 'ignore',
-    })
-    child.on('error', () => {})
-    child.unref()
-    return true
-  } catch {
-    return false
-  }
-}
 
 function readJson(req, limit = 16_384) {
   return new Promise((resolve, reject) => {
@@ -106,11 +57,13 @@ export function applyHost(ctx, services = {}) {
   const timers = new Set()
   let profile
   try { profile = ctx.get?.('profileContext') ?? ctx.profileContext } catch { /* Profiles are optional in test/native embeddings. */ }
-  const nativeOrigin = services.nativeOrigin ?? process.env.DSH_NOTIFY_WINDOWS_ORIGIN
-  const native = nativeOrigin && profile?.dir ? createToastTransport(nativeOrigin, profile.dir, undefined, packet => interactions.submit(packet)) : null
-  const deliver = native?.deliver ?? services.deliver ?? deliverNotification
   const preferences = createPreferences(profile?.dir ? join(profile.dir, 'notify-interactive.settings.json') : undefined)
-  let presentation = null
+  let native = services.transport
+  let reason = 'missing-origin'
+  function desktopStatus() {
+    return { scope: 'reminders', native: true, enabled: reason !== 'disabled', available: Boolean(native),
+      reason: native ? native.reason?.() : reason, profileId: profile?.dir ? notificationProfileId(profile.dir) : native?.profileId }
+  }
   function authorize(req, res) {
     try {
       const connection = ctx.get?.('connection') ?? ctx.connection
@@ -122,32 +75,9 @@ export function applyHost(ctx, services = {}) {
     return false
   }
 
-  const lastNotify = new Map()
-  const companion = services.companion ?? (native ? { dispose() {} } : createCompanion({ onEvent: event => {
-    if (event.type === 'interaction') void interactions.submit(event).then(result => companion.interactionResult?.(event.id, event.actionId, result.status))
-  } }))
-  const interactions = createInteractionBroker({ coordinator,
-    onUpdate: (eventId, view) => { native?.update(eventId, view); void companion.updateInteraction?.(eventId, view) } })
-  // Also allow an injected transport to exercise the identical command path.
-  companion.onInteraction?.(async event => interactions.submit(event))
+  const interactions = createInteractionBroker({ coordinator, onUpdate: (id, view) => native?.update?.(id, view) })
   const interactionSweep = setInterval(() => interactions.sweep(), 1000)
   interactionSweep.unref?.()
-  const legacy = services.legacy ?? showWindowsPopup
-  let companionWarning = ''
-
-  function notifyOnce(sessionId, kind, title, body, silent = false, url = '') {
-    const now = Date.now()
-    const key = `${sessionId}:${kind}`
-    const last = lastNotify.get(key)
-    if (last !== undefined && now - last < NOTIFY_COOLDOWN_MS) return false
-    lastNotify.set(key, now)
-    if (lastNotify.size > 200) {
-      for (const [entryKey, at] of lastNotify) {
-        if (now - at > 10 * 60 * 1000) lastNotify.delete(entryKey)
-      }
-    }
-    return legacy(title, body, silent, url)
-  }
 
   async function presenceRoute(req, res) {
     if (!authorize(req, res)) return
@@ -159,12 +89,6 @@ export function applyHost(ctx, services = {}) {
     try {
       const body = await readJson(req)
       coordinator.present(body)
-      const view = body.presentation
-      if (view && typeof view.url === 'string' && /^https?:\/\//.test(view.url)) {
-        const url = new URL(view.url)
-        if (!url.username && !url.password) presentation = { url: url.origin, theme: view.theme ?? {}, openLabel: truncate(view.openLabel ?? 'DSH', 80), closeLabel: truncate(view.closeLabel ?? 'Close', 80) }
-      }
-      if (body.focused && body.visible) for (const fact of coordinator.deliveredFor(body.sessionId)) { void companion.withdraw?.(fact.id); void companion.silence?.(fact.id) }
       res.writeHead(204)
       res.end()
     } catch {
@@ -182,56 +106,25 @@ export function applyHost(ctx, services = {}) {
     }
     try {
       const body = await readJson(req)
-      const sessionId = typeof body?.sessionId === 'string' ? body.sessionId : 'web'
+      const sessionId = body?.sessionId
+      if (typeof sessionId !== 'string' || !sessionId) { writeJson(res, 400, { delivery: 'missing-session' }); return }
       const kind = typeof body?.kind === 'string' ? body.kind : 'notice'
       const title = truncate(body?.title ?? 'DSH', 80)
       const text = truncate(body?.body ?? '', 500)
-      const requestedUrl = typeof body?.url === 'string' && /^https?:\/\//.test(body.url)
-        ? body.url
-        : (process.env.DSH_WEB_URL ?? '')
-      // Older already-open pages still use this route; share the same host claim.
-      if (coordinator.resolve(sessionId, kind, body.callId) && requestedUrl) {
-        const { status, ...result } = await dispatch({ ...body, sessionId, kind, url: requestedUrl }, true)
+      if (coordinator.resolve(sessionId, kind, body.callId)) {
+        const { status, ...result } = await dispatch(body, true)
         writeJson(res, status, result)
         return
       }
-      if (native) {
-        // Stale requests from older tabs must not open the former Windows surfaces.
-        if (kind !== 'demo-completion') { writeJson(res, 409, { shown: false, delivery: 'event-not-current' }); return }
-        const eventKind = kind.slice(5)
-        const { settings } = await preferences.snapshot()
-        const policy = channelPolicy(settings, eventKind)
-        const result = await native.deliver({ fact: { kind: eventKind, id: `demo-${Date.now()}`, sessionId },
-          payload: { sessionTitle: body.sessionTitle, title, body: text }, getPolicy: () => policy, isCurrent: () => true })
+      if (kind !== 'demo-completion') { writeJson(res, 409, { delivery: 'event-not-current' }); return }
+      if (!native) { writeJson(res, 503, { delivery: reason }); return }
+      await preferences.snapshot()
+      try {
+        const result = await native.deliver({ fact: { kind: 'completion', id: `demo-${randomUUID()}`, sessionId },
+          payload: { sessionTitle: truncate(body.sessionTitle ?? '', 200), title, body: text },
+          getPolicy: () => channelPolicy(preferences.current(), 'completion'), isCurrent: () => true })
         writeJson(res, 200, result)
-        return
-      }
-      if (getCompanionStatus().enabled && ['completion', 'demo-completion', 'demo-approval', 'demo-question', 'demo-plan-review'].includes(kind) && requestedUrl) {
-        const url = new URL(requestedUrl)
-        url.searchParams.set('dsh-notify-session', sessionId)
-        const sound = body?.sound ?? {}
-        const preset = SOUND_PRESETS.find(item => item.id === sound.preset)
-        const audio = body?.silent === true || sound.enabled === false || !preset ? '' : renderPresetToDataUrl(preset)
-        const sessionTitle = truncate(body?.sessionTitle ?? '', 200)
-        const prefix = `${sessionTitle} · `
-        const desktopBody = sessionTitle && text.startsWith(prefix) ? text.slice(prefix.length) : text
-        const result = await companion.deliver({
-          title, sessionTitle, body: desktopBody, url: url.href, popup: true,
-          openLabel: truncate(body?.openLabel ?? 'DSH', 80), closeLabel: truncate(body?.closeLabel ?? 'Close', 80), theme: body?.theme ?? {},
-          audio, volume: Number.isFinite(sound.volume) ? Math.max(0, Math.min(1, sound.volume)) : 0.7,
-        })
-        if (result.status === 'rendered') companionWarning = ''
-        if (['rendered', 'uncertain', 'queued'].includes(result.status)) {
-          writeJson(res, 200, { shown: result.status === 'rendered', delivery: result.status })
-          return
-        }
-        if (companionWarning !== result.reason) {
-          companionWarning = result.reason
-          console.warn('[dsh-notify-interactive] companion fallback:', result.reason)
-        }
-      }
-      const shown = notifyOnce(sessionId, kind, title, text, body?.silent === true, requestedUrl)
-      writeJson(res, 200, { shown, delivery: shown ? 'process-started' : 'unavailable' })
+      } catch { writeJson(res, 503, { delivery: 'failed' }) }
     } catch {
       res.writeHead(400)
       res.end()
@@ -247,11 +140,7 @@ export function applyHost(ctx, services = {}) {
       const next = await preferences.update(body.revision, body.patch, body.initial)
       if (!next.conflict) for (const fact of coordinator.deliveredFor()) {
         const policy = channelPolicy(next.settings, fact.kind)
-        if (!policy.popup) {
-          native?.retire(fact)
-          void companion.withdraw?.(fact.id)
-        }
-        if (!policy.sound) void companion.silence?.(fact.id)
+        if (!policy.popup) native?.retire(fact)
       }
       writeJson(res, next.conflict ? 409 : 200, next)
     } catch { writeJson(res, 503, { error: 'preferences-unavailable' }) }
@@ -278,32 +167,30 @@ export function applyHost(ctx, services = {}) {
 
   async function dispatch(body, legacyClient = false) {
     if (typeof body.sessionId !== 'string' || !['approval', 'question', 'plan-review', 'completion'].includes(body.kind)) return { status: 400, shown: false, delivery: 'invalid-event' }
-    const url = new URL(body.url)
-    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return { status: 400, shown: false, delivery: 'invalid-url' }
+    if (!native) return { status: 503, shown: false, delivery: reason }
     const fact = coordinator.resolve(body.sessionId, body.kind, body.callId)
     if (!fact) return { status: 409, shown: false, delivery: 'event-not-current' }
-    presentation = { theme: body.theme ?? {}, url: body.url, openLabel: body.openLabel, closeLabel: body.closeLabel }
     const focusTarget = fact.kind === 'completion' && preferences.current().popup.completionMode === 'window-away' ? undefined : body.sessionId
     // A newly foreground tab may not have posted its first view change yet.
     const grace = fact.at + 1250 - Date.now()
-    if (grace > 0 && (native || coordinator.attended(focusTarget)) && !coordinator.attended(focusTarget, fact.at)) {
+    if (grace > 0 && !coordinator.attended(focusTarget, fact.at)) {
       await new Promise(resolve => setTimeout(resolve, grace))
     }
-    const { settings } = await preferences.snapshot()
+    await preferences.snapshot()
     if (!coordinator.claim(fact)) return { status: 200, shown: false, delivery: 'duplicate' }
-    const policy = eventPolicy(settings, fact)
-    if (legacyClient && body.silent) policy.sound = false
-    url.searchParams.set('dsh-notify-session', body.sessionId)
     const sessionTitle = truncate(body.sessionTitle ?? '', 200)
     const text = truncate(body.body ?? '', 500)
     const prefix = `${sessionTitle} · `
-    const result = await deliver({ fact, companion, available: services.available ?? getCompanionStatus().enabled,
-      legacy, policy, getInteraction: () => interactions.presentation(fact.id),
-      getPolicy: () => { const value = eventPolicy(preferences.current(), fact); if (legacyClient && body.silent) value.sound = false; return value },
-      isCurrent: () => (native && fact.kind === 'completion') || coordinator.resolve(body.sessionId, body.kind, body.callId)?.id === fact.id,
-      payload: { eventId: fact.id, interaction: interactions.presentation(fact.id), sticky: body.kind !== 'completion', title: truncate(body.title ?? 'DSH', 80), sessionTitle,
-        body: sessionTitle && text.startsWith(prefix) ? text.slice(prefix.length) : text,
-        url: url.href, theme: body.theme ?? {}, openLabel: truncate(body.openLabel ?? 'DSH', 80), closeLabel: truncate(body.closeLabel ?? 'Close', 80), webPopup: body.webPopup === true },
+    const result = await native.deliver({ fact, getInteraction: () => interactions.presentation(fact.id),
+      getPolicy: () => {
+        const value = eventPolicy(preferences.current(), fact)
+        if (legacyClient && body.silent) value.sound = false
+        return value
+      },
+      isCurrent: () => fact.kind === 'completion' || coordinator.resolve(body.sessionId, body.kind, body.callId)?.id === fact.id,
+      payload: { title: truncate(body.title ?? 'DSH', 80), sessionTitle,
+        body: fact.completionReason && fact.completionReason !== 'completed' ? fact.message.body
+          : sessionTitle && text.startsWith(prefix) ? text.slice(prefix.length) : text },
     })
     coordinator.finish(fact, result.delivery)
     return { status: 200, ...result }
@@ -318,6 +205,20 @@ export function applyHost(ctx, services = {}) {
   }
 
   ctx.inject(['webServer'], (scope) => {
+    if (!services.transport) {
+      const disabled = (process.env.DSH_NOTIFY_WINDOWS ?? process.env.DSH_NOTIFY_COMPANION) === '0'
+      if (disabled) reason = 'disabled'
+      else if (!existsSync(windowsShell)) reason = 'missing-windows'
+      else if (profile?.dir) {
+        try {
+          const origin = process.env.DSH_NOTIFY_WINDOWS_ORIGIN ?? scope.webServer.getOrigin()
+          const target = new URL(origin)
+          if (!['http:', 'https:'].includes(target.protocol) || target.href !== target.origin + '/') throw Error('invalid-origin')
+          native = createToastTransport(target.origin, profile.dir, undefined, packet => interactions.submit(packet))
+        } catch { reason = 'missing-origin' }
+      }
+      scope.effect(() => () => { native?.dispose(); native = undefined }, 'dsh-notify-interactive: Windows transport')
+    }
     for (const [path, handler] of [['settings', settingsRoute], ['deliver', coordinatedDelivery], ['interactions', interactionRoute('sync')], ['interaction-execute', interactionRoute('execute')], ['interaction-result', interactionRoute('result')]]) {
       scope.effect(() => scope.webServer.register({ kind: 'exact', path: `/dsh-notify-interactive/${path}`, handler }), `dsh-notify-interactive: ${path}`)
     }
@@ -328,7 +229,7 @@ export function applyHost(ctx, services = {}) {
         if (!authorize(req, res)) return
         if (req.method !== 'GET') { res.writeHead(405); res.end(); return }
         res.setHeader?.('cache-control', 'no-store')
-        writeJson(res, 200, native ? { scope: 'reminders', enabled: true, available: existsSync(WSL_POWERSHELL), native: true, profileId: native.profileId } : getCompanionStatus())
+        writeJson(res, 200, desktopStatus())
       },
     }), 'dsh-notify-interactive: desktop status')
     scope.effect(() => scope.webServer.register({
@@ -351,27 +252,17 @@ export function applyHost(ctx, services = {}) {
     for (const old of before) {
       if (coordinator.resolve(session.id, old.kind)?.id === old.id) continue
       native?.retire(old)
-      void companion.withdraw?.(old.id)
-      void companion.silence?.(old.id)
     }
-    if (!fact) return
+    if (!fact || !native) return
     const timer = setTimeout(async () => {
       timers.delete(timer)
-      const keepCompletion = native && fact.kind === 'completion'
+      const keepCompletion = fact.kind === 'completion'
       if (!(keepCompletion ? coordinator.waiting(fact) : coordinator.pending(fact))) return
       try {
-        const { settings } = await preferences.snapshot()
-        const policy = eventPolicy(settings, fact)
-        if (!coordinator.claim(fact)) return
-        const base = presentation?.url || process.env.DSH_WEB_URL || ''
-        const url = base ? new URL(base) : null
-        url?.searchParams.set('dsh-notify-session', String(session.id))
-        const payload = { eventId: fact.id, interaction: interactions.presentation(fact.id), sticky: message.kind !== 'completion', title: message.title, sessionTitle: '', body: message.body,
-          url: url?.href ?? 'http://localhost/', theme: presentation?.theme ?? {},
-          openLabel: presentation?.openLabel ?? 'DSH', closeLabel: presentation?.closeLabel ?? 'Close' }
-        const result = await deliver({ fact, companion, policy,
-          available: Boolean(presentation) && (services.available ?? getCompanionStatus().enabled),
-          legacy, payload, getInteraction: () => interactions.presentation(fact.id),
+        await preferences.snapshot()
+        if (!native || !coordinator.claim(fact)) return
+        const result = await native.deliver({ fact, payload: { title: message.title, body: message.body },
+          getInteraction: () => interactions.presentation(fact.id),
           getPolicy: () => eventPolicy(preferences.current(), fact),
           isCurrent: () => keepCompletion || coordinator.resolve(session.id, message.kind)?.id === fact.id })
         coordinator.finish(fact, result.delivery)
@@ -384,11 +275,8 @@ export function applyHost(ctx, services = {}) {
   ctx.effect(() => () => {
     for (const timer of timers) clearTimeout(timer)
     clearInterval(interactionSweep)
-    native?.dispose()
     interactions.dispose()
     coordinator.clear()
-    companion.dispose()
-    lastNotify.clear()
   }, 'dsh-notify-interactive: host runtime')
 }
 

@@ -1,70 +1,43 @@
 # dsh-notify-interactive
 
-DSH Web 会话提醒插件。未关注事件所属会话时提醒；正在看该会话时静默。当前重点：Arch WSL 运行 DSH Web，Windows 侧显示极简桌面窗口。
+DSH Web 的审批、提问、计划审核和一轮结束可以进入 Windows 通知中心。默认在离开事件所属会话时提醒。横幅消失后按 Win+N，点击正文回到该会话。
 
-[English](README.en.md) · [需求与阶段计划](docs/requirements.md) · [接口调查](docs/research.md) · [验收与证据](docs/verification.md)
+[English](README.en.md) · [需求与路线](docs/requirements.md) · [实机验收](docs/verification.md#17-正式通道安装升级与卸载)
 
-## 当前开发状态
+## 安装与升级
 
-2026-11-21 已确定迁移为 Windows 原生通知，支持从通知中心找回提醒。Windows 原生预览已支持四类提醒、完成时机四档、独立音效和通知中心回会话。用 `pnpm native:acceptance --windows-toast --host <WSL-IPv4> --port <空闲端口>` 在隔离实例体验。开发版宿主可通过 `DSH_NOTIFY_WINDOWS_ORIGIN` 指定 Windows 可达的 Web origin 启用此通道，例如 `http://<WSL-IPv4>:3080`（仅协议、主机、端口）。正文打开对应会话。已登录网页持有当前请求时，可在通知中心直接允许一次、拒绝、回答短文本或简单单选题。复杂题和计划在原页面处理。下文描述默认运行的旧实现。[原生作答实测](docs/verification.md#16-原生动作与失效复测)
+本地候选版本为 **0.3.0**，已在 Arch WSL、Windows 11 与 DSH 0.2.2-rc.5 上验收。使用 DSH 的 `plugin_manager` 执行 `install_bundle`，target 指向解包目录或已构建的仓库绝对路径。已有本地链接的 profile 直接使用新版构建产物。升级后重启 DSH Web，刷新已打开的 DSH 标签。Windows 当前用户的无窗口激活程序在启动时自动注册。
 
-P3 应答桥接开发代码，目标 DSH 0.2.2-rc.1；package 版本仍为 0.2.1，新增能力尚未发布。
+升级时用原来的浏览器和 Web 地址打开页面。已有 profile 配置优先；只有浏览器里有旧配置或用户主动修改设置时，才首次写入 profile。存储文件为当前 profile 的 `notify-interactive.settings.json`。完成通知时机缺省为「离开当前会话时」。
 
-- 审批、提问、计划审核、结束统一投递至桌面；支持排队及请求失效撤回。已关联的审批可允许一次/拒绝，提问支持完整批次、单选/多选、自定义及明确跳过，计划审核保留原始选项与计划正文。
-- 总开关、弹窗与声音独立开关；四种事件分别开关及选择音效，支持默认音效、音量、试听。
-- 设置保存至当前 DSH profile；首次迁移 localStorage，跨标签按 revision 同步，断线编辑保留待同步。
-- Host 按请求/turn ID 统一认领，聚合每个 Web 标签的焦点；在线但没有投递的 Web 不会永久阻止宿主接管。
-- 自有路由复用 DSH 的认证、Host/Origin 与 owner 校验。只观察 session/event，不写 session log、不注入 prompt、不注册模型工具、不自动作答。
+## 设置和使用
 
-**桌面作答依赖一个已登录且在线的 Web 页面持有当前 Pending 对象。** 无法可靠关联时仅提醒/回会话；提交超时不自动重发，结果不确定时回 DSH 核对。手动浏览器作答窗口保留；TUI、DSH Desktop 非本轮重点，Linux 原生桌面尚未验收。
+- 在「设置 → 互动提醒」分别配置四类事件的通知、声音和音效，选择默认音效和音量。完成通知另有始终、离开当前会话、离开整个 DSH 窗口、从不四档。
+- 打开一个会话，在设置页点「测试桌面提醒」，再到 Win+N 的「DSH Web」下找到它。Windows 的应用开关、横幅开关和勿扰设置继续生效。升级沿用预览版的 Windows 通知身份。
+- 有在线且已认证的页面持有当前请求时，短审批可在系统通知里允许一次或拒绝；简单题支持短单选、输入或显式跳过。复杂提问和计划进入原 Web 界面处理。清除通知不会替你回答。结果不确定时，打开会话核对。
+- 默认使用 DSH 实际监听的 Web 地址。若通过反向代理或不同主机名登录，把 `DSH_NOTIFY_WINDOWS_ORIGIN` 设为 Windows 可达且已登录的 Web origin，例如 `https://dsh.example.org`，再重启。地址、端口和 profile 一致，才可在重启后用旧通知定位会话。需要登录时，在同一浏览器完成登录，再刷新目标页面。
+- 可从设置关闭提醒。要在宿主启动时禁用整个 Windows 通道，设置 `DSH_NOTIFY_WINDOWS=0`。兼容旧的 `DSH_NOTIFY_COMPANION=0`；显式设置新变量优先。缺少 Windows 互操作或动作辅助程序时，设置页提供状态。Linux 原生桌面未验收。
 
-## 本地使用
+## 卸载
 
-当前机器 web profile 已链接本仓库。新安装在 DSH 中优先使用 plugin_manager install_bundle，target 为仓库绝对路径。
+仅移除旧版安装器下载的 Windows Electron 运行时，可在关闭旧版宿主后运行 `node scripts/uninstall-windows.mjs --legacy-only`。正常升级不会调用旧窗口，也不会自动删除磁盘上的旧运行时。
 
-在仓库中运行（安装器需要 Node.js >=22.12，插件自身仍支持 Node.js 20）：
+完整卸载时，先停用本插件并关闭使用它的 DSH Web 实例。在包目录运行以下命令，再通过 DSH 插件管理移除 bundle。完整清理影响当前 Windows 用户的全部 DSH Web profile，包括本插件在通知中心的历史、应用通知偏好、注册项和辅助程序。各 DSH profile 的插件配置文件保留。
 
 ```sh
-pnpm install
-pnpm companion:install
+node scripts/uninstall-windows.mjs --dry-run
+node scripts/uninstall-windows.mjs
+```
+
+## 开发与复现
+
+```sh
+pnpm install --frozen-lockfile
 pnpm verify
+pnpm pack
+pnpm native:acceptance --host 127.0.0.1 --port 39714
 ```
 
-Windows Electron 运行时约 357 MiB，WSL 下载副本另占相近空间；位于 Windows LocalAppData，不注册开机自启。窗口与 Host 使用连接独立文件邮箱，不监听额外网络端口。辅助程序安装后自动启用；DSH_NOTIFY_COMPANION=0 可强制回退旧原生路径。
+验收入口创建临时 profile 和本地确定性模型；Ctrl+C 清理。可用 `--bundle <已安装的包目录>` 验收实际包，或 `--timed` 验证 continued 提问。若 Windows 无法访问 WSL 的回环转发，在可信网络上可用 WSL 的具体 IPv4 地址启动并使用 DSH 打印的登录链接。
 
-当前任务结束后重启宿主，刷新所有已登录 Web 标签：
-
-```sh
-dsh --profile web --no-open
-```
-
-设置 → 互动提醒 → 弹窗与触发场景：配置四类事件；确认“设置已保存到 DSH profile”。桌面提醒区提供完成演示；通道行为按第 11 节、[交互按第 12 节验收](docs/verification.md#12-p3-桌面人工应答桥接)。首次读取时由首个成功迁移的浏览器提供旧设置，其他页面随后采用 profile 配置。
-
-## 配置与边界
-
-- 权威文件：当前 profile 的 notify-interactive.settings.json（schema v3 + revision）；localStorage 键 dsh.notify-interactive.settings.v2 仅作缓存和迁移源。
-- 断线编辑需等待同步；配置损坏不会静默覆盖，应先备份再检查。
-- Windows 辅助程序缺失时退回现有 PowerShell 提醒/系统音，原生进程启动不等同窗口已显示，也不承诺匹配所选合成音效。
-- 审批缺 callId、同 callId 重复审批或元数据不匹配时仅提醒。阻塞式提问没有 Pending.callId 时，需完整批次唯一匹配宿主工具事件；计划审核从 intent.callId 关联。歧义请求回 DSH。Web 断线保留桌面草稿，辅助程序重启不恢复草稿。
-- 真实用户会话、多标签、重启后配置和精准回会话仍待手工验收；自动测试和合成事件通过不等于真实环境全部通过。
-
-## 开发与验证
-
-```sh
-pnpm verify
-pnpm companion:smoke
-pnpm coordination:smoke
-pnpm interaction:smoke
-```
-
-桌面冒烟会显示真实模拟窗口，前两项桌面测试可能播放音效，结束清理测试进程。交互冒烟仅操作独立测试进程及模拟 Pending，临时为该进程开启 loopback DevTools 以验证真实 renderer 按钮；正式路径无此端口。真实用户会话仍需手工验收，详细证据见验证文档。
-
-src/client 为状态/presence 与设置同步；src/host 为协调/持久化/认证和投递；companion 为窗口/队列；src/ui 为设置与旧 Web 卡片；src/audio 为合成声音。lib 由构建同步，不能手改。窗口文件变更后可运行 node scripts/stage-companion.mjs，同步内容变化会重新加载通知辅助程序。
-
-独立原生验收（需本机已安装 DSH 0.2.2-rc.1）：`pnpm native:acceptance`。脚本创建临时 profile/登录凭据和本地确定性适配器，走真实 DSH 审批、内置提问/计划工具与 Pending；不读取现有模型凭据，不发外部模型请求。可加 `--timed` 验证一秒后 continued/rpc，Ctrl+C 清理；操作步骤及已取得证据见[验收第 13 节](docs/verification.md#13-p3-原生-dsh-独立实例验收与接口修复)。
-
-## Windows 无法连接 WSL Web
-
-若 WSL 内有 HTTP 响应，而 Windows 访问 localhost 拒绝连接，先排查 WSL localhost 转发；终端无报错不能证明 Windows 已能访问。可在 Web 空闲时改用 `dsh web --host <WSL-IPv4> --port 3080 --no-open`，打开新打印的完整认证链接。用 `ip -4 -o addr show dev eth0` 查看当前地址；地址可能随 WSL 重启变化。不要只改旧认证链接的主机名，也不必为此关闭整个 WSL。此方式监听 WSL 网卡，适用于可信的本地网络。
-
-[MIT](LICENSE) © 2026 wuqiuwangtian
+[MIT](LICENSE)

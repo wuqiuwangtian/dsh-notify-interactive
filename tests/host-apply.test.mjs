@@ -78,5 +78,27 @@ test('desktop status route reports capability without exposing local paths', () 
   assert.equal(typeof payload.enabled, 'boolean')
   assert.equal(typeof payload.available, 'boolean')
   assert.equal(payload.scope, 'reminders')
-  assert.deepEqual(Object.keys(payload).sort(), ['available', 'enabled', 'mode', 'scope'])
+  assert.equal(payload.native, true)
+  assert.equal(payload.available, false)
+  assert.ok(['missing-origin', 'missing-windows', 'disabled'].includes(payload.reason))
+})
+
+test('disabling Windows at startup keeps old clients and test buttons from opening a fallback', async t => {
+  const previous = process.env.DSH_NOTIFY_WINDOWS
+  process.env.DSH_NOTIFY_WINDOWS = '0'
+  t.after(() => { if (previous === undefined) delete process.env.DSH_NOTIFY_WINDOWS; else process.env.DSH_NOTIFY_WINDOWS = previous })
+  const { routes } = fakeContext()
+  for (const [path, kind] of [['deliver', 'completion'], ['windows-notify', 'demo-completion']]) {
+    const req = new EventEmitter()
+    req.method = 'POST'
+    let status, result
+    const done = routes.get('/dsh-notify-interactive/' + path).handler(req, {
+      writeHead(code) { status = code }, end(text) { result = JSON.parse(text) },
+    })
+    req.emit('data', Buffer.from(JSON.stringify({ sessionId: 'session', kind })))
+    req.emit('end')
+    await done
+    assert.equal(status, 503)
+    assert.equal(result.delivery, 'disabled')
+  }
 })

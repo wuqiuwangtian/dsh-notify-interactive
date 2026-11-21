@@ -1,27 +1,11 @@
-/**
- * Notification engine.
- *
- * One rule decides silence: if the user is focused on the exact conversation,
- * nothing happens. Otherwise the engine plays the optional sound and delivers
- * the event through the best available surface:
- * - the detached popup when it is already open (interactive);
- * - otherwise the host's Windows popup fallback (reminder only).
- */
-
-import {
-  completionNotificationId,
-  interactionNotificationId,
-} from '../state/notifications.js'
 import { diffSessionStatus } from './diff.js'
 import {
   findMainSessionId,
   gateChannels,
   isSubagentSession,
-  scenarioForInteraction,
   sessionTitleOf,
 } from './suppression.js'
 
-const COMPLETION_COOLDOWN_MS = 2000
 const BODY_LIMIT = 200
 
 /** Keep notification bodies short and free of HTML. */
@@ -39,28 +23,10 @@ export function truncate(value, limit = BODY_LIMIT) {
 export function createEngine(options) {
   const {
     settingsStore,
-    notificationStore,
-    soundPlayer,
-    translate,
-    resolveText,
-    getVisibility,
-    getFocused,
-    isPopupOpen = () => false,
-    onWindowsFallback,
-    onHostDelivery,
-    now = () => Date.now(),
+    translate, resolveText, getVisibility, getFocused, onHostDelivery,
   } = options
-
   let previous = new Map()
-  let lastStatus = null
-  let lastSessions = null
-  const completionSequence = new Map()
-  const completionCooldown = new Map()
-  const completionTimers = new Map()
-
-  const t = (key, vars) => translate(key, vars)
-  const visibility = () => (typeof getVisibility === 'function' ? getVisibility() : 'visible')
-  const focused = () => (typeof getFocused === 'function' ? Boolean(getFocused()) : false)
+  const t = translate
 
   function fallbackTitle(kind) {
     if (kind === 'approval') return t('notify.approval.title')
@@ -80,227 +46,22 @@ export function createEngine(options) {
     return truncate([sessionTitle, question].filter(Boolean).join(' · '))
   }
 
-  function playSound(settings) {
-    if (settings.sound.enabled === false) return false
-    if (settings.sound.preset === 'none') return false
-    return soundPlayer?.play?.(settings.sound.preset, settings.sound.volume) === true
-  }
-
-  // A failed Web playback may use the system sound only when sound is allowed.
-  function fallbackSilent(settings, gate, soundPlayed) {
-    return !gate.sound || settings.sound.preset === 'none'
-      || settings.sound.volume <= 0 || soundPlayed
-  }
-
-  function deliverWindows(kind, sessionId, sessionTitle, title, body, silent) {
-    onWindowsFallback?.({
-      kind,
-      sessionId,
-      sessionTitle,
-      title,
-      body,
-      silent: silent === true,
-    })
-  }
-
-  function scheduleCompletionRemoval(id) {
-    const timer = setTimeout(() => {
-      completionTimers.delete(id)
-      notificationStore.remove(id)
-    }, 8000)
-    timer.unref?.()
-    completionTimers.set(id, timer)
-  }
-
-  function handleInteraction(event, settings, sessionList, mainSessionId) {
-    const interaction = event.interaction
-    const kind = interaction?.kind === 'approval'
-      ? 'approval'
-      : interaction?.kind === 'plan-review'
-        ? 'plan-review'
-        : 'question'
-    const scenarioKey = scenarioForInteraction(interaction)
-    const sessionId = String(event.sessionId)
-    const sessionTitle = sessionTitleOf(sessionList, sessionId)
-
-    if (isSubagentSession(sessionList, sessionId)) return
-
-    const gate = gateChannels({
-      settings,
-      scenarioKey,
-      sessionId,
-      mainSessionId,
-      visibility: visibility(),
-      focused: focused(),
-    })
-    if (!gate.sound && !gate.notify) return
-
-    if (onHostDelivery) {
-      if (gate.notify) notificationStore.upsert({ id: interactionNotificationId(sessionId, interaction.key), kind, scenario: scenarioKey, sessionId, sessionTitle, interaction, sticky: true, demo: false })
-      onHostDelivery({ kind, sessionId, sessionTitle, title: fallbackTitle(kind), body: interactionBody(interaction, sessionTitle), callId: interaction.callId, pendingKey: interaction.key, webPopup: isPopupOpen(), gate, scenarioKey })
-      return
-    }
-    const soundPlayed = gate.sound ? playSound(settings) : false
-    if (!gate.notify) return
-
-    // Keep the card even while the popup is closed: the user can open the
-    // optional interactive popup later and answer it there. When the popup is
-    // closed, the Windows popup also fires immediately as the outside alert.
-    notificationStore.upsert({
-      id: interactionNotificationId(sessionId, interaction.key),
-      kind,
-      scenario: scenarioKey,
-      sessionId,
-      sessionTitle,
-      interaction,
-      sticky: true,
-      demo: false,
-    })
-    if (!isPopupOpen()) {
-      deliverWindows(kind, sessionId, sessionTitle, fallbackTitle(kind), interactionBody(interaction, sessionTitle), fallbackSilent(settings, gate, soundPlayed))
-    }
-  }
-
-  function handleCompletion(event, settings, sessionList, mainSessionId) {
-    const sessionId = String(event.sessionId)
-    if (isSubagentSession(sessionList, sessionId)) return
-
-    const timestamp = now()
-    const last = completionCooldown.get(sessionId)
-    if (last !== undefined && timestamp - last < COMPLETION_COOLDOWN_MS) return
-
-    const gate = gateChannels({
-      settings,
-      scenarioKey: 'completion',
-      sessionId,
-      mainSessionId,
-      visibility: visibility(),
-      focused: focused(),
-    })
-    if (!gate.sound && !gate.notify) return
-
-    completionCooldown.set(sessionId, timestamp)
-    const sessionTitle = sessionTitleOf(sessionList, sessionId)
-    if (onHostDelivery) {
-      if (gate.notify) {
-        const sequence = (completionSequence.get(sessionId) ?? 0) + 1
-        completionSequence.set(sessionId, sequence)
-        const id = completionNotificationId(sessionId, sequence)
-        notificationStore.removeWhere(item => item.sessionId === sessionId && item.kind === 'completion')
-        notificationStore.upsert({ id, kind: 'completion', scenario: 'completion', sessionId, sessionTitle, sticky: false, completedAt: timestamp, demo: false })
-        scheduleCompletionRemoval(id)
-      }
-      onHostDelivery({ kind: 'completion', sessionId, sessionTitle, title: fallbackTitle('completion'), body: truncate([sessionTitle, t('notify.completion.body')].filter(Boolean).join(' · ')), webPopup: isPopupOpen(), gate, scenarioKey: 'completion' })
-      return
-    }
-    const soundPlayed = gate.sound ? playSound(settings) : false
-    if (!gate.notify) return
-
-    const sequence = (completionSequence.get(sessionId) ?? 0) + 1
-    completionSequence.set(sessionId, sequence)
-    notificationStore.removeWhere(
-      (item) => item.sessionId === sessionId && item.kind === 'completion',
-    )
-    const id = completionNotificationId(sessionId, sequence)
-    notificationStore.upsert({
-      id,
-      kind: 'completion',
-      scenario: 'completion',
-      sessionId,
-      sessionTitle,
-      sticky: false,
-      completedAt: timestamp,
-      demo: false,
-    })
-    scheduleCompletionRemoval(id)
-    if (!isPopupOpen()) {
-      deliverWindows(
-        'completion',
-        sessionId,
-        sessionTitle,
-        fallbackTitle('completion'),
-        truncate([sessionTitle, t('notify.completion.body')].filter(Boolean).join(' · ')),
-        fallbackSilent(settings, gate, soundPlayed),
-      )
-    }
-  }
-
-  function clearInteractionCard(sessionId, interactionKey) {
-    notificationStore.remove(interactionNotificationId(sessionId, interactionKey))
-  }
-
-  /** Reconcile live popup cards with the latest status snapshot. */
-  function reconcileInteractions(statusMap) {
-    const snapshot = notificationStore.getSnapshot()
-    for (const item of snapshot) {
-      if (item.demo === true) continue
-      if (item.kind !== 'approval' && item.kind !== 'question' && item.kind !== 'plan-review') continue
-      const status = statusMap.get(item.sessionId)
-      if (status === undefined) continue
-      const pending = status.pendingInteraction
-      const currentKey = pending?.key ?? null
-      const cardKey = item.interaction?.key ?? null
-      if (pending === undefined || pending === null || currentKey !== cardKey) {
-        notificationStore.remove(item.id)
-        continue
-      }
-      if (pending !== item.interaction) {
-        notificationStore.update(item.id, { interaction: pending })
-      }
-    }
-  }
-
-  /** Ingest one SessionStatus snapshot. */
   function ingest(status, sessionList) {
-    if (status === lastStatus && sessionList === lastSessions) return
-    lastStatus = status
-    lastSessions = sessionList
-    const settings = settingsStore.getSnapshot()
-
-    if (!settings.enabled) {
-      previous = new Map()
-      notificationStore.clear()
-      return
-    }
-
-    const statusMap = status instanceof Map ? status : new Map()
-    const mainSessionId = findMainSessionId(sessionList)
-    const { next, events } = diffSessionStatus(previous, statusMap)
+    const { next, events } = diffSessionStatus(previous, status)
     previous = next
-    reconcileInteractions(statusMap)
-
+    const settings = settingsStore.getSnapshot()
+    const mainSessionId = findMainSessionId(sessionList)
     for (const event of events) {
-      if (event.type === 'interaction') {
-        handleInteraction(event, settings, sessionList, mainSessionId)
-      } else if (event.type === 'completion') {
-        handleCompletion(event, settings, sessionList, mainSessionId)
-      } else if (event.type === 'interaction-cleared') {
-        clearInteractionCard(event.sessionId, event.interactionKey)
-      } else if (event.type === 'session-removed') {
-        notificationStore.removeSession(event.sessionId)
-        completionCooldown.delete(event.sessionId)
-        completionSequence.delete(event.sessionId)
-      }
+      if (!['interaction', 'completion'].includes(event.type) || isSubagentSession(sessionList, event.sessionId)) continue
+      const { interaction, sessionId } = event
+      const kind = interaction?.kind ?? 'completion'
+      const gate = gateChannels({ settings, scenarioKey: kind === 'plan-review' ? 'planReview' : kind,
+        sessionId, mainSessionId, visibility: getVisibility(), focused: getFocused() })
+      if (!gate.notify && !gate.sound) continue
+      const sessionTitle = sessionTitleOf(sessionList, sessionId)
+      onHostDelivery({ kind, sessionId, sessionTitle, callId: interaction?.callId, title: fallbackTitle(kind),
+        body: interaction ? interactionBody(interaction, sessionTitle) : t('notify.completion.body') })
     }
   }
-
-  /** Forget the baseline after a connection reset without dropping live cards. */
-  function reset() {
-    previous = new Map()
-    lastStatus = null
-    lastSessions = null
-  }
-
-  /** Drop all in-memory state (plugin unload / master switch off). */
-  function dispose() {
-    previous = new Map()
-    lastStatus = null
-    lastSessions = null
-    completionCooldown.clear()
-    completionSequence.clear()
-    for (const timer of completionTimers.values()) clearTimeout(timer)
-    completionTimers.clear()
-  }
-
-  return { ingest, reset, dispose }
+  return { ingest, reset() { previous = new Map() } }
 }

@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createCoordinator } from '../src/host/coordinator.js'
-import { channelPolicy, deliverNotification } from '../src/host/delivery.js'
+import { channelPolicy } from '../src/host/delivery.js'
 import { createDefaultSettings, mergeSettings } from '../src/state/settings.js'
 
 const session = { id: 'session-1' }
@@ -62,20 +62,6 @@ test('global and event popup/sound gates are independent, including event preset
   assert.equal(channelPolicy(mergeSettings(createDefaultSettings(), { scenarios: { approval: { notify: false, preset: 'none' } } }), 'approval').popup, false)
 })
 
-test('sound-only delivery creates no popup; uncertain delivery does not ring again through fallback', async () => {
-  const calls = []
-  let fallbacks = 0
-  const options = { companion: { deliver: async value => { calls.push(value); return { status: 'uncertain' } } }, available: true, legacy: () => { fallbacks++; return true }, payload: { body: 'done' }, policy: { popup: false, sound: true, preset: 'pulse', volume: 0.5 } }
-  assert.equal((await deliverNotification(options)).delivery, 'uncertain')
-  assert.equal(calls[0].popup, false)
-  assert.match(calls[0].audio, /^data:audio\/wav/)
-  assert.equal(fallbacks, 0)
-  options.companion.deliver = async () => ({ status: 'unavailable' })
-  await deliverNotification(options)
-  assert.equal(fallbacks, 1)
-})
-
-
 test('continued questions stay current until their real reply, including long human waits', () => {
   let clock = 100
   const c = createCoordinator({ now: () => clock })
@@ -87,18 +73,6 @@ test('continued questions stay current until their real reply, including long hu
   assert.equal(c.resolve(session.id, 'question'), undefined)
 })
 
-
-test('a request invalidated during companion startup is not presented or sent to native fallback', async () => {
-  let valid = true, fallback = false
-  const result = await deliverNotification({
-    available: true, policy: { popup: true, sound: true, preset: 'pulse', volume: 0.5 }, payload: {},
-    isCurrent: () => valid,
-    companion: { deliver: async (_payload, prepare) => { valid = false; assert.equal(prepare(), null); return { status: 'suppressed' } } },
-    legacy: () => { fallback = true },
-  })
-  assert.equal(result.delivery, 'suppressed')
-  assert.equal(fallback, false)
-})
 
 test('native tool/result uses message.toolCallId and text blocks, preserving continued questions until replied', () => {
   const c = createCoordinator()

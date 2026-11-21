@@ -12,22 +12,12 @@ import {
   Slider,
   Switch,
 } from './controls.jsx'
-import {
-  AlertIcon,
-  BellIcon,
-  CheckIcon,
-  QuestionIcon,
-} from './icons.jsx'
-
 /** Settings page registered into the DSH Settings panel. */
 export function Settings() {
   const settings = useStore(runtime.settingsStore)
   const preferencesStatus = useStore(runtime.preferencesSync)
-  const notifications = useStore(runtime.notificationStore)
-  const popup = useStore(runtime.popupController)
   const { t } = useLocale(runtime.ctx)
   const storeStatus = runtime.settingsStore.getStatus()
-  const [audioReady, setAudioReady] = useState(() => runtime.soundPlayer?.isReady?.() ?? false)
   const [previewStatus, setPreviewStatus] = useState(null)
   const [resetDone, setResetDone] = useState(false)
   const [desktop, setDesktop] = useState(null)
@@ -38,35 +28,30 @@ export function Settings() {
     return () => { active = false }
   }, [])
   const desktopStatusKey = desktop === null ? 'desktopLoading'
-    : desktop.native && desktop.available ? 'desktopNative'
-    : desktop.reason === 'host-unavailable' ? 'desktopHostUnavailable'
-      : desktop.mode === 'disabled' ? 'desktopDisabled'
-        : !desktop.available ? 'desktopMissing' : 'desktopReady'
+    : !desktop.native && desktop.reason !== 'host-unavailable' ? 'desktopHostUnavailable'
+    : ({ 'host-unavailable': 'desktopHostUnavailable', disabled: 'desktopDisabled', 'missing-windows': 'desktopMissing',
+      'missing-origin': 'desktopOrigin', 'actions-unavailable': 'desktopActions', 'delivery-failed': 'desktopFailed' })[desktop.reason] ?? 'desktopNative'
 
   async function testDesktop() {
     setDesktopTest('desktopTesting')
     try {
       const main = runtime.getMainSession?.() ?? {}
-      const result = await runtime.windowsFallback({
-        kind: 'demo-completion', sessionId: main.id ?? 'demo-session',
-        title: t('settings.demoWindowsTitle'), body: t('settings.demoWindowsCompletion'), silent: !settings.sound.enabled,
+      const result = await runtime.testNotification({
+        kind: 'demo-completion', sessionId: main.id,
+        title: t('settings.demoWindowsTitle'), sessionTitle: main.title, body: t('settings.demoWindowsCompletion'),
       })
       const nativeStatus = { accepted: 'nativeAccepted', 'sound-only': 'nativeSound', 'system-muted': 'nativeMuted', suppressed: 'nativeSuppressed' }
-      setDesktopTest(nativeStatus[result?.delivery] ?? (result?.delivery === 'rendered' ? 'desktopDelivered'
-        : result?.delivery === 'queued' ? 'desktopQueued'
-          : result?.delivery === 'uncertain' ? 'desktopUncertain'
-          : result?.delivery === 'process-started' ? 'desktopLegacy' : 'desktopFailed'))
+      setDesktopTest(nativeStatus[result?.delivery] ?? 'desktopFailed')
+      setDesktop(await runtime.getDesktopStatus())
     } catch { setDesktopTest('desktopFailed') }
   }
 
   useEffect(() => {
     setPreviewStatus(null)
-    setAudioReady(runtime.soundPlayer?.isReady?.() ?? false)
   }, [settings.sound.enabled, settings.sound.preset])
 
   const main = runtime.getMainSession?.() ?? { id: undefined, title: undefined }
   const mainSessionId = main.id
-  const mainTitle = main.title
   const update = (patch) => runtime.settingsStore.update(patch)
   const soundOptions = SOUND_PRESET_IDS.map((id) => ({ value: id, label: t(`sound.${id}`) }))
   const previewLabel = previewStatus === null
@@ -85,41 +70,9 @@ export function Settings() {
     try {
       const result = await runtime.previewSound(settings.sound.preset, settings.sound.volume)
       setPreviewStatus(result)
-      setAudioReady(
-        result === 'played'
-        || result === 'fallback'
-        || (runtime.soundPlayer?.isReady?.() ?? false),
-      )
     } catch {
       setPreviewStatus('blocked')
     }
-  }
-
-  async function openPopup() {
-    if (runtime.notificationStore.count() === 0) return
-    try {
-      await runtime.openPopup()
-    } catch {
-      // The controller reports a blocked popup through its snapshot.
-    }
-  }
-
-  function addDemo(kind) {
-    runtime.addDemo(kind, { sessionId: mainSessionId, sessionTitle: mainTitle })
-    if (runtime.surfaceStore.isPopup()) return
-    const suffix = kind === 'question' ? 'Question' : kind === 'completion' ? 'Completion' : 'Approval'
-    runtime.windowsFallback({
-      kind: `demo-${kind}`,
-      sessionId: mainSessionId ?? 'demo-session',
-      title: t('settings.demoWindowsTitle'),
-      body: t(`settings.demoWindows${suffix}`),
-      silent: false,
-    })
-  }
-
-  function openPopupTest() {
-    runtime.addDemo('approval', { sessionId: mainSessionId, sessionTitle: mainTitle })
-    openPopup()
   }
 
   function reset() {
@@ -131,11 +84,9 @@ export function Settings() {
   if (storeStatus.storageError === 'read') warnings.push(t('settings.storageReadError'))
   if (storeStatus.storageError === 'write') warnings.push(t('settings.storageWriteError'))
   if (storeStatus.storageAvailable === false) warnings.push(t('settings.storageUnavailable'))
-  if (popup.error === 'blocked') warnings.push(t('settings.popupBlocked'))
 
   return h('div', { className: 'dni-settings' },
     h('header', { className: 'dni-settings-head' },
-      h('div', { className: 'dni-settings-mark', 'aria-hidden': true }, h(BellIcon, { size: 22 })),
       h('div', { className: 'dni-settings-headtext' },
         h('h2', { className: 'dni-settings-title' }, t('settings.title')),
         h('p', { className: 'dni-settings-description' }, t('settings.description')),
@@ -144,20 +95,10 @@ export function Settings() {
 
     warnings.map((warning, index) => h('div', { key: `warning-${index}`, className: 'dni-warning' }, warning)),
 
-    !desktop?.native && h('div', { className: 'dni-statusbar' },
-      h(Badge, { tone: popup.open ? 'success' : 'neutral' },
-        `${t('settings.popup')}: ${popup.open ? t('settings.popupOpenState') : t('settings.popupClosedState')}`),
-      h(Badge, { tone: audioReady ? 'success' : 'warn' },
-        `${t('settings.audio')}: ${audioReady ? t('settings.audioReady') : t('settings.audioBlocked')}`),
-      notifications.length > 0
-        ? h(Badge, { tone: 'neutral' }, `${t('settings.active')}: ${notifications.length}`)
-        : null,
-    ),
-
     h('p', { className: 'dni-hint', role: 'status' }, t(`settings.preferences.${preferencesStatus}`)),
 
     h(Section, { title: t('settings.master') },
-      h(Field, { label: t('settings.master'), hint: t('settings.masterHint') },
+      h(Field, { label: t('settings.master') },
         h(Switch, {
           checked: settings.enabled,
           label: t('settings.master'),
@@ -244,58 +185,13 @@ export function Settings() {
 
     h(Section, { title: t('settings.desktop') },
       h('p', { className: 'dni-hint' }, t(`settings.${desktopStatusKey}`)),
-      h(Button, {
+      h('div', { className: 'dni-inline' }, h(Button, {
         variant: 'outline', size: 'sm',
-        disabled: !desktop?.enabled || !desktop?.available || desktopTest === 'desktopTesting',
+        disabled: !mainSessionId || !desktop?.enabled || !desktop?.available || desktopTest === 'desktopTesting',
         onClick: testDesktop,
-      }, t('settings.desktopTest')),
+      }, t('settings.desktopTest'))),
+      !mainSessionId && h('p', { className: 'dni-hint' }, t('settings.selectSession')),
       desktopTest !== null ? h('p', { className: 'dni-hint', role: 'status' }, t(`settings.${desktopTest}`)) : null,
-    ),
-
-    !desktop?.native && h(Section, { title: t('settings.popup') },
-      h(Field, { label: t('settings.popupAvailability'), hint: t('settings.popupHint') },
-        h('div', { className: 'dni-inline' },
-          h(Button, {
-            variant: 'outline',
-            size: 'sm',
-            disabled: !popup.open && notifications.length === 0,
-            onClick: popup.open ? () => runtime.closePopup() : openPopup,
-          }, popup.open ? t('settings.popupClose') : t('settings.popupOpen')),
-          h(Button, {
-            variant: 'ghost',
-            size: 'sm',
-            onClick: openPopupTest,
-          }, t('settings.popupTest')),
-          h(Button, {
-            variant: 'ghost',
-            size: 'sm',
-            onClick: () => runtime.windowsFallback({
-              kind: 'test',
-              sessionId: 'test',
-              title: t('settings.testWindowsTitle'),
-              body: t('settings.testWindowsBody'),
-            }),
-          }, t('settings.testWindows')),
-        ),
-      ),
-      typeof globalThis.documentPictureInPicture?.requestWindow !== 'function'
-        ? h('div', { className: 'dni-hint' }, t('settings.popupUnsupported'))
-        : null,
-    ),
-
-    !desktop?.native && h(Section, { title: t('settings.tests') },
-      h('div', { className: 'dni-test-grid' },
-        h(Button, { variant: 'outline', size: 'sm', onClick: () => addDemo('approval') },
-          h(AlertIcon, { size: 14 }), t('settings.testApproval')),
-        h(Button, { variant: 'outline', size: 'sm', onClick: () => addDemo('question') },
-          h(QuestionIcon, { size: 14 }), t('settings.testQuestion')),
-        h(Button, { variant: 'outline', size: 'sm', onClick: () => addDemo('completion') },
-          h(CheckIcon, { size: 14 }), t('settings.testCompletion')),
-      ),
-      h('div', { className: 'dni-hint' }, t('settings.testsHint')),
-      mainSessionId !== undefined
-        ? h('div', { className: 'dni-hint' }, `${t('card.openSession')}: ${mainTitle}`)
-        : null,
     ),
 
     h(Section, { title: t('settings.reset') },

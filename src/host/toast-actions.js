@@ -38,7 +38,7 @@ export async function startToastActivator(shell, instance) {
     child.stdin.on('error', reject)
     child.stdin.end(Buffer.from(source).toString('base64'))
   })
-  const executable = (await run('wslpath', ['-u', compiled])).stdout.trim()
+  const executable = process.platform === 'win32' ? compiled : (await run('wslpath', ['-u', compiled])).stdout.trim()
   const helper = spawn(executable, ['--host', instance], { stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true })
   helper.stdin.on('error', () => {}) // The Windows process may already have exited.
   const closed = new Promise(resolve => helper.once('close', resolve))

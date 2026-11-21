@@ -101,3 +101,22 @@ test('existing v3 profiles inherit session-away and preserve event audio when ti
     assert.deepEqual(settings.scenarios.approval, { notify: true, sound: false, preset: 'alert' })
   } finally { await rm(dir, { recursive: true, force: true }) }
 })
+
+test('a clean browser leaves first migration available for the browser with actual v2 preferences', async () => {
+  const host = createPreferences()
+  const clean = createPreferencesSync(memoryStore(), { fetch: transport(host) })
+  const old = createSettingsStore({ getItem: () => JSON.stringify({ version: 2, sound: { volume: 0.25 },
+    scenarios: { question: { notify: false, preset: 'alert' } } }), setItem() {} })
+  const migrate = createPreferencesSync(old, { fetch: transport(host) })
+  try {
+    await clean.synchronize()
+    assert.equal((await host.snapshot()).initialized, false)
+    await migrate.synchronize()
+    const { settings, revision } = await host.snapshot()
+    assert.equal(revision, 1)
+    assert.equal(settings.sound.volume, 0.25)
+    assert.equal(settings.scenarios.question.notify, false)
+    assert.equal(settings.scenarios.question.preset, 'alert')
+    assert.equal(settings.popup.completionMode, 'session-away')
+  } finally { clean.stop(); migrate.stop() }
+})

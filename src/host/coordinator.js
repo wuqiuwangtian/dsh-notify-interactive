@@ -57,6 +57,7 @@ export function createCoordinator({ now = Date.now, ttl = PRESENCE_TTL_MS } = {}
       try { questionKey = questionsKey(JSON.parse(data.arguments).questions) } catch { /* Unparseable requests remain reminder-only. */ }
     }
     const fact = { id, sessionId, kind: message.kind, callId: data.callId, at: now(), message, questionKey,
+      ...(message.kind === 'completion' ? { completionReason: data.reason?.kind } : {}),
       ...(message.kind === 'approval' ? { approval: { toolName: data.toolName, reason: data.reason ?? '' } } : {}) }
     facts.set(keyOf(sessionId, message.kind), fact)
     events.set(id, { fact, status: 'waiting' })

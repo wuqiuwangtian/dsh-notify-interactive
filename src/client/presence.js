@@ -28,7 +28,6 @@ export function createPresenceReporter(options = {}) {
     return JSON.stringify({
       active,
       clientId: options.clientId,
-      presentation: state.presentation,
       sessionId: state.sessionId,
       focused: state.focused === true,
       visible: state.visible === true,

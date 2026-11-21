@@ -7,33 +7,30 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { isIP } from 'node:net'
-import { removePreviewHistory } from '../src/host/windows-toast.js'
+import { removeProfileHistory } from '../src/host/windows-toast.js'
 import { createPreferences } from '../src/host/preferences.js'
 
 const args = process.argv.slice(2)
 if (args.includes('--help')) {
-  console.log('pnpm native:acceptance [--host <local-IP>] [--port <port>] [--timed] [--windows-toast] [--desktop-debug-port <port>]\nWindows toast preview requires --host and a fixed --port, uses native notifications with sound initially off. Creates a temporary home, silent settings and a local no-network adapter; Ctrl+C cleans up. Optional DSH_NOTIFY_DSH_BIN selects the launcher.')
+  console.log('pnpm native:acceptance [--host <local-IP>] [--port <port>] [--timed] [--bundle <installed-package-directory>]\nUses the native transport and starts with sound off. Creates a temporary home, silent settings and a local no-network adapter; Ctrl+C cleans up. Optional DSH_NOTIFY_DSH_BIN selects the launcher.')
   process.exit(0)
 }
 const value = name => args.includes(name) ? args[args.indexOf(name) + 1] : undefined
-const port = Number(value('--port') ?? 0), debugPort = Number(value('--desktop-debug-port') ?? 0)
-if (![port, debugPort].every(n => Number.isInteger(n) && n >= 0 && n <= 65535)) throw Error('invalid-port')
-const windowsToast = args.includes('--windows-toast')
+const port = Number(value('--port') ?? 0)
+if (!Number.isInteger(port) || port < 0 || port > 65535) throw Error('invalid-port')
 const address = value('--host')
-if (windowsToast && (!port || isIP(address ?? '') !== 4 || address === '0.0.0.0' || debugPort)) {
-  throw Error('windows-toast-requires-reachable-IPv4-fixed-port-and-no-desktop-debug')
-}
+if (address && (!isIP(address) || address === '0.0.0.0' || address === '::')) throw Error('invalid-listen-address')
 const binary = realpathSync(process.env.DSH_NOTIFY_DSH_BIN ?? execFileSync('which', ['dsh'], { encoding: 'utf8' }).trim())
 const installation = resolve(dirname(binary), '..'), require = createRequire(join(installation, 'package.json'))
-const repo = fileURLToPath(new URL('..', import.meta.url))
+const repo = resolve(value('--bundle') ?? fileURLToPath(new URL('..', import.meta.url)))
 const root = await mkdtemp(join(tmpdir(), 'dsh-notify-native-'))
 const profile = join(root, 'profiles/web')
 let child
 try {
-  const fixture = join(root, 'fixture'), wrapper = join(root, 'notify-wrapper')
-  await Promise.all([mkdir(join(profile, 'node_modules'), { recursive: true }), mkdir(fixture), mkdir(wrapper), mkdir(join(root, 'workspace'))])
+  const fixture = join(root, 'fixture')
+  await Promise.all([mkdir(join(profile, 'node_modules'), { recursive: true }), mkdir(fixture), mkdir(join(root, 'workspace'))])
   await writeFile(join(profile, 'package.json'), JSON.stringify({ name: 'notify-native-profile', private: true,
-    dependencies: { 'dsh-notify-interactive': `link:${wrapper}`, 'notify-native-fixture': `link:${fixture}` },
+    dependencies: { 'dsh-notify-interactive': `link:${repo}`, 'notify-native-fixture': `link:${fixture}` },
     dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', 'dsh-notify-interactive', 'notify-native-fixture'] } } }))
   let patch = '[]\n'
   if (args.includes('--timed')) {
@@ -51,21 +48,7 @@ try {
   await writeFile(join(fixture, 'package.json'), JSON.stringify({ name: 'notify-native-fixture', type: 'module', main: 'index.mjs', dsh: { bundle: { patch: './cordis.patch.yml' } } }))
   await writeFile(join(fixture, 'cordis.patch.yml'), '- insert:\n    - id: notify-native-fixture\n      name: notify-native-fixture\n')
   await writeFile(join(fixture, 'index.mjs'), `import { LlmAdapter } from ${JSON.stringify(pathToFileURL(require.resolve('@deepseek-ai/dsh-llm')).href)}\nimport { createNativeAdapter } from ${JSON.stringify(new URL('./fixtures/native-adapter.mjs', import.meta.url).href)}\nexport const inject=['llm','agents','approval']; export function apply(ctx){ctx.effect(()=>ctx.llm.registerAdapter(['notify-fixture'],createNativeAdapter(LlmAdapter,ctx)))}\n`)
-  const manifest = JSON.parse(await readFile(join(repo, 'package.json'), 'utf8'))
-  manifest.main = './host.mjs'; manifest.exports['.'] = './host.mjs'
-  await writeFile(join(wrapper, 'package.json'), JSON.stringify(manifest))
-  for (const name of ['lib', 'cordis.patch.yml', 'locale', 'icon.svg']) await symlink(join(repo, name), join(wrapper, name))
-  const hostUrl = new URL('../lib/index.js', import.meta.url).href
-  let host = `export {apply} from ${JSON.stringify(hostUrl)}\n`
-  if (debugPort) host = `import{applyHost}from ${JSON.stringify(hostUrl)}; import{createCompanion,resolveCompanionLaunch}from ${JSON.stringify(new URL('../src/host/companion.js', import.meta.url).href)};export function apply(ctx){let submit;const companion=createCompanion({launch(){const c=resolveCompanionLaunch();return {...c,args:[...c.args,'--remote-debugging-port=${debugPort}','--remote-debugging-address=127.0.0.1']}},onEvent(e){if(e.type==='interaction')void submit(e).then(r=>companion.interactionResult(e.id,e.actionId,r.status))}});companion.onInteraction=handler=>{submit=handler};applyHost(ctx,{companion})}\n`
-  if (windowsToast) {
-    const origin = new URL(`http://${address}:${port}`).origin
-    host = `import {applyHost} from ${JSON.stringify(hostUrl)}
-export function apply(ctx) { applyHost(ctx, { nativeOrigin: ${JSON.stringify(origin)} }) }
-`
-  }
-  await writeFile(join(wrapper, 'host.mjs'), host)
-  await symlink(wrapper, join(profile, 'node_modules/dsh-notify-interactive'))
+  await symlink(repo, join(profile, 'node_modules/dsh-notify-interactive'))
   await symlink(fixture, join(profile, 'node_modules/notify-native-fixture'))
   const env = Object.fromEntries(['PATH', 'HOME', 'SHELL', 'LANG', 'TERM', 'WSL_INTEROP', 'WSL_DISTRO_NAME', 'USER', 'LOGNAME', 'TMPDIR', 'XDG_RUNTIME_DIR'].filter(key => process.env[key]).map(key => [key, process.env[key]]))
   console.log(`Isolated DSH home: ${root}\nTest workspace: ${join(root, 'workspace')}\nSelect notify-fixture approval/simple-question/question/plan/completion. For plan, use /plan on. Use another conversation to test desktop delivery. ${args.includes('--timed') ? 'Questions continue after one second.' : 'Questions block until answered.'}`)
@@ -89,8 +72,8 @@ export function apply(ctx) { applyHost(ctx, { nativeOrigin: ${JSON.stringify(ori
     process.off('SIGHUP', restart)
   }
 } finally {
-  if (windowsToast && child) {
-    await removePreviewHistory(profile).catch(() => console.warn('Unable to remove the temporary notification group.'))
+  if (child) {
+    await removeProfileHistory(profile).catch(() => console.warn('Unable to remove the temporary notification group.'))
   }
   if (!child || child.exitCode !== null || child.signalCode !== null) await rm(root, { recursive: true, force: true })
 }

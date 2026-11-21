@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Interactive notifications",
-    "description": "Stay silent while focused on the conversation; otherwise use the DSH-styled interactive popup, or a Windows popup reminder when the popup or a Web UI is unavailable."
+    "description": "Per-event notifications and sounds for DSH Web, with session links and quick replies in Windows Notification Center."
   }
 }

@@ -128,12 +128,13 @@ export function createSettingsStore(storage) {
   const listeners = new Set()
   let storageError = null
   let current
+  let hasSavedSettings = false
 
   try {
     const text = target?.getItem(SETTINGS_KEY)
-    current = text === null || text === undefined
-      ? createDefaultSettings()
-      : normalizeSettings(JSON.parse(text))
+    const saved = text == null ? null : JSON.parse(text)
+    hasSavedSettings = isObject(saved)
+    current = normalizeSettings(saved)
   } catch {
     current = createDefaultSettings()
     storageError = 'read'
@@ -159,6 +160,7 @@ export function createSettingsStore(storage) {
   }
 
   return {
+    hasSavedSettings,
     getSnapshot: () => current,
     getStatus: () => ({ storageAvailable: Boolean(target), storageError }),
     subscribe(listener) {

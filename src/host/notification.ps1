@@ -1,4 +1,4 @@
-# Native banner and Notification Center identity for the Windows preview.
+# Native banner and Notification Center identity (keep the historical AUMID to preserve user settings).
 $ErrorActionPreference = 'Stop'
 $appId = 'DSH.NotifyInteractive.Preview'
 $data = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String([Console]::In.ReadToEnd().Trim())) | ConvertFrom-Json
@@ -15,7 +15,7 @@ if ($data.removeTag) {
     return
 }
 if (!(Test-Path $key)) { $null = New-Item -Path $key -Force }
-$null = New-ItemProperty -Path $key -Name DisplayName -Value 'DSH Web (Preview)' -PropertyType String -Force
+$null = New-ItemProperty -Path $key -Name DisplayName -Value 'DSH Web' -PropertyType String -Force
 $notifier = $manager::CreateToastNotifier($appId)
 
 # WinRT can return ELEMENT_NOT_FOUND before the first Show registers this identity.

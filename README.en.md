@@ -1,58 +1,43 @@
 # dsh-notify-interactive
 
-DSH Web reminders: stay silent while attending the relevant conversation, otherwise notify through a small desktop window. Current focus: DSH Web in Arch WSL, with a Windows companion.
+Windows Notification Center reminders for DSH Web approvals, questions, plan reviews and completed turns. By default, events in the conversation you are viewing stay quiet. Press Win+N and click a notification to return to its session.
 
-[中文](README.md) · [Requirements](docs/requirements.md) · [Research](docs/research.md) · [Verification](docs/verification.md)
+[中文](README.md) · [Requirements](docs/requirements.md) · [Acceptance results](docs/verification.md#17-正式通道安装升级与卸载)
 
-## Development status
+## Install or upgrade
 
-The November 21 plan moves Windows delivery to native app notifications with Notification Center history. The implementation described below predates this migration. The opt-in native preview handles approvals, questions, plans and turn completions, with four completion timing options and independent audio. Click the body to open the original Web session. With an authenticated page owning the live request, Notification Center supports one-time approval, rejection and short text or single-choice answers. Open the session for batches and plan reviews. Run `pnpm native:acceptance --windows-toast --host <WSL-IPv4> --port <free-port>` to try an isolated profile. See the [current roadmap](docs/requirements.md).
+The local release candidate is **0.3.0**, tested with Arch WSL, Windows 11 and DSH 0.2.2-rc.5. Use DSH’s `plugin_manager` operation `install_bundle` with the absolute path of the extracted package or built checkout. Restart DSH Web and reload its open pages. The host registers a windowless Windows activator for the current user.
 
-P3 answer-bridge development code targeting DSH 0.2.2-rc.1. Package version remains 0.2.1; these changes are unreleased.
+Open the original browser and Web origin after upgrading. Existing profile settings take precedence. A browser with saved settings can migrate them into `notify-interactive.settings.json` in the current profile. A fresh browser leaves migration available until an explicit settings edit.
 
-Approvals, questions, plan reviews and completion share host delivery claims. Linked requests support Allow once/Reject, full question batches, single/multiple choices, custom text and explicit skipping. Plan reviews retain the original options and full plan. Popups and sound have independent global/per-event controls and presets. Preferences migrate to the current profile with revision-based merging; offline edits remain queued.
+## Use
 
-**Desktop answering requires an authenticated, connected Web page owning the live Pending object.** Approvals with missing IDs, repeated call IDs or mismatched metadata remain reminder-only. Unnamed blocking questions require a unique match of the complete host question batch; plan reviews use intent.callId. Lost acknowledgements never replay answers. Drafts survive a temporary Web disconnect, but not a companion restart. TUI, DSH Desktop and native Linux acceptance are outside this iteration.
+Open **Settings → Interactive notifications** to configure notifications, audio and sound presets independently for each event. Completion notification timing has four levels. With a conversation open, use **Test desktop completion reminder**, open Win+N and click the entry under **DSH Web**. Windows controls banners, Do Not Disturb and notification history.
 
-The host only observes committed session/event messages. No automatic answers, session-log writes, prompt injection, model-tool registration or approval-waterfall interception. Plugin routes use DSH authentication, authority checks and owner admission.
+A connected, authenticated page owning the live request enables one-time approval, rejection and short single-choice or text answers. Open the original session for a batch, a multi-select question or a plan. Clearing a notification leaves its request pending. Verify uncertain submissions in DSH.
 
-## Local setup
+The host uses the bound DSH listener origin. If Windows reaches your instance through a proxy or another name, set `DSH_NOTIFY_WINDOWS_ORIGIN` to that trusted origin and restart. Reuse the same address, port and profile for historical links. If login is required, authenticate in the same browser and refresh the target page.
 
-The current Web profile is linked to this repository. Within DSH, prefer plugin_manager install_bundle with the absolute repository path.
+The settings master switch controls reminders. `DSH_NOTIFY_WINDOWS=0` disables the Windows transport at host startup. The previous `DSH_NOTIFY_COMPANION=0` is honored when the new variable is absent. Native Linux desktop delivery has not been validated.
+
+## Uninstall
+
+To reclaim the previous Windows Electron runtime only, stop the old host and run `node scripts/uninstall-windows.mjs --legacy-only`. For full removal, disable the plugin and stop all DSH instances using it. From the extracted package or repository run the following, then remove the bundle using DSH. Full cleanup removes this Windows user’s DSH notification history, OS notification preferences, registrations and helper files across profiles. DSH profile preferences are retained.
 
 ```sh
-pnpm install
-pnpm companion:install
+node scripts/uninstall-windows.mjs --dry-run
+node scripts/uninstall-windows.mjs
+```
+
+## Development
+
+```sh
+pnpm install --frozen-lockfile
 pnpm verify
+pnpm pack
+pnpm native:acceptance --host 127.0.0.1 --port 39714
 ```
 
-The companion installer needs Node.js >=22.12; the plugin still supports Node.js 20. The Windows Electron runtime is about 357 MiB, plus the WSL download copy. It lives in LocalAppData, without autostart registration or an extra network listener. Installed companions are detected automatically; DSH_NOTIFY_COMPANION=0 forces the previous native path.
+The acceptance harness uses a temporary home and a deterministic local adapter. Ctrl+C cleans up. Pass `--bundle <installed package directory>` to test an actual package. Use a Windows-reachable WSL IPv4 on a trusted network if loopback forwarding is unavailable.
 
-After active work finishes, restart DSH and refresh all authenticated Web tabs:
-
-```sh
-dsh --profile web --no-open
-```
-
-Configure event channels in Interactive notifications. Confirm that profile preferences are saved. The authoritative file is notify-interactive.settings.json in the current profile (schema v3 with revision); dsh.notify-interactive.settings.v2 localStorage remains a cache/migration source. The first successful migration wins; later pages adopt the profile state. Corrupt files are not silently overwritten.
-
-## Verification and limitations
-
-```sh
-pnpm verify
-pnpm companion:smoke
-pnpm coordination:smoke
-pnpm interaction:smoke
-```
-
-Desktop smoke commands show real synthetic windows and may play audio. Interaction smoke clicks the actual Windows renderer using a temporary loopback DevTools endpoint belonging only to its test process, with mock DSH context/auth and Pending objects; production does not open this endpoint. Actual user sessions and precise return navigation still require acceptance testing. See verification sections 11–12.
-
-Without the companion, the Windows fallback uses the existing PowerShell dialog/system sound; process startup does not prove visibility or matching synthesized sound presets. Native Linux remains unverified.
-
-Build and commit lib with source changes. Window updates can be staged with node scripts/stage-companion.mjs; content revisions reload the notification companion.
-
-`pnpm native:acceptance` starts an isolated temporary DSH profile with a deterministic local adapter, real native approvals and built-in question/plan tools. It does not read existing credentials or make external model requests. Add `--timed` for continued/rpc questions; Ctrl+C cleans up. Requires installed DSH 0.2.2-rc.1. See verification section 13 for evidence and remaining manual checks.
-
-If Windows cannot reach WSL localhost while WSL itself responds, check localhost forwarding. When idle, an alternative is `dsh web --host <WSL-IPv4> --port 3080 --no-open`, using its newly printed complete authentication URL. Find the address with `ip -4 -o addr show dev eth0`; it may change after a WSL restart. This binds the WSL interface and is intended for a trusted local network.
-
-[MIT](LICENSE) © 2026 wuqiuwangtian
+[MIT](LICENSE)

@@ -17,7 +17,7 @@ test('non-Chinese locales fall back to English', () => {
   assert.match(translate('fr', 'settings.title'), /Interactive notifications/)
 })
 
-test('placeholder interpolation works in both dictionaries', () => {
-  assert.equal(translate('zh', 'card.question.countdown', { seconds: 3 }), '3 秒后继续工作')
-  assert.equal(translate('en', 'card.question.countdown', { seconds: 3 }), 'Continuing in 3s')
+test('event labels use the selected language', () => {
+  assert.equal(translate('zh', 'settings.scenario.approval'), '权限申请')
+  assert.equal(translate('en', 'settings.scenario.approval'), 'Permission requests')
 })

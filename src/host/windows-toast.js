@@ -1,13 +1,17 @@
 import { createHash } from 'node:crypto'
+import { join } from 'node:path'
 import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { createToastActions, startToastActivator } from './toast-actions.js'
 import { SOUND_PRESETS } from '../audio/sounds.js'
 import { renderPresetToDataUrl } from '../audio/wav.js'
 
-const shell = '/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe'
+export const windowsShell = process.platform === 'win32'
+  ? join(process.env.SystemRoot || 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe')
+  : '/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe'
 const digest = value => createHash('sha256').update(value).digest('hex').slice(0, 16)
 const historyGroup = (profile, pending) => digest(JSON.stringify([process.env.WSL_DISTRO_NAME, profile, pending]))
+export const notificationProfileId = profile => historyGroup(profile, false)
 const script = new URL('./notification.ps1', import.meta.url)
 
 async function callWindows(packet) {
@@ -15,7 +19,7 @@ async function callWindows(packet) {
   const command = Buffer.from(source, 'utf16le').toString('base64')
   const input = Buffer.from(JSON.stringify(packet)).toString('base64')
   return new Promise((resolve, reject) => {
-    const child = execFile(shell, ['-NoProfile', '-NonInteractive', '-EncodedCommand', command],
+    const child = execFile(windowsShell, ['-NoProfile', '-NonInteractive', '-EncodedCommand', command],
       { windowsHide: true, timeout: 15000 }, (error, stdout) => {
         if (error) reject(new Error(`windows-notification-call-failed (${error.code ?? error.signal})`))
         else resolve(stdout.trim())
@@ -25,7 +29,7 @@ async function callWindows(packet) {
   })
 }
 
-export async function removePreviewHistory(profile) {
+export async function removeProfileHistory(profile) {
   for (const pending of [false, true]) await callWindows({ removeGroup: historyGroup(profile, pending) })
 }
 
@@ -45,18 +49,20 @@ export function createToastTransport(origin, profile, send = callWindows, submit
   const withdraw = id => {
     if (pending.delete(id)) return remove(id).catch(() => console.warn('[dsh-notify-interactive] Windows history removal failed'))
   }
-  const actions = submit && createToastActions({ register: instance => startToastActivator(shell, instance), submit, withdraw })
+  const actions = submit && createToastActions({ register: instance => startToastActivator(windowsShell, instance), submit, withdraw })
   let disposed = false
-  const prepare = () => actions?.prepare().catch(() => console.warn('[dsh-notify-interactive] Windows actions unavailable'))
+  let actionError = false, deliveryError = false
+  const prepare = () => actions?.prepare().then(() => { actionError = false }, () => { actionError = true })
   void prepare()
   let ready
   function initialize() {
-    ready ??= send({ removeGroup: group }).catch(error => { ready = undefined; throw error })
+    ready ??= send({ removeGroup: group }).catch(error => { ready = undefined; deliveryError = true; throw error })
     return ready
   }
   initialize().catch(() => {}) // Retry a transient startup failure on delivery.
   return {
-    profileId: historyGroup(profile, false),
+    reason: () => deliveryError ? 'delivery-failed' : actionError ? 'actions-unavailable' : undefined,
+    profileId: notificationProfileId(profile),
     async deliver({ fact, payload, getPolicy, isCurrent, getInteraction }) {
       await initialize()
       const interactive = actions && getInteraction && ['approval', 'question'].includes(fact.kind)
@@ -75,7 +81,8 @@ export function createToastTransport(origin, profile, send = callWindows, submit
       const form = interactive && policy.popup ? actions.bind(fact.id, getInteraction, live, failure) : null
       if (form) toast.body = form.prompt
       let status
-      try { status = await send({ ...toast, form, popup: policy.popup, wav }) }
+      try { status = await send({ ...toast, form, popup: policy.popup, wav }); deliveryError = false }
+      catch (error) { deliveryError = true; throw error }
       finally { if (status !== 'accepted') actions?.revoke(fact.id) }
       if (policy.popup && status === 'accepted' && fact.kind !== 'completion') {
         if (live() && (!form || actions.current(fact.id, getInteraction()))) pending.add(fact.id)

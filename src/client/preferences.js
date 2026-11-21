@@ -53,7 +53,7 @@ export function createPreferencesSync(store, options = {}) {
       // Do not overwrite edits until their patches have been applied on the server.
       revision = remote.revision
       initialized = remote.initialized
-      if (!initialized) {
+      if (!initialized && store.hasSavedSettings) {
         const migrated = await fetcher(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ revision, initial }) })
         if (!migrated.ok && migrated.status !== 409) throw Error('preferences-migration-failed')
         const result = await migrated.json()
@@ -73,8 +73,8 @@ export function createPreferencesSync(store, options = {}) {
         const latest = await fetcher(endpoint, { cache: 'no-store' })
         if (latest.ok) {
           const value = await latest.json()
-          if (!queue.length && !stopped) apply(value)
-          else reschedule = true
+          if (queue.length) reschedule = true
+          else if (!stopped && value.initialized) apply(value)
         }
       }
       publish(queue.length ? 'connecting' : 'synced')

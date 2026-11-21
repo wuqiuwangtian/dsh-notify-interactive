@@ -21,5 +21,8 @@ try {
     $server.SetValue('ServerExecutable', $executable)
 } finally { $server.Dispose() }
 $app = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Software\Classes\AppUserModelId\DSH.NotifyInteractive.Preview')
-try { $app.SetValue('CustomActivator', $clsid) } finally { $app.Dispose() }
+try {
+    $app.SetValue('CustomActivator', $clsid)
+    $app.SetValue('DisplayName', 'DSH Web')
+} finally { $app.Dispose() }
 [Console]::Write([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($executable)))

@@ -4,7 +4,7 @@ import { EventEmitter } from 'node:events'
 import { applyHost } from '../src/host/index.js'
 
 function harness(rejection, deliveryDelayMs = 10000, principal = 'owner') {
-  const routes = new Map(), events = new Map(), cleanups = [], effects = [], withdrawn = [], silenced = []
+  const routes = new Map(), events = new Map(), cleanups = [], effects = [], withdrawn = []
   const effect = callback => { const cleanup = callback(); if (typeof cleanup === 'function') cleanups.push(cleanup) }
   const ctx = {
     get: key => key === 'connection' ? { requestRejection: () => rejection, admit: () => ({ peer: { principal: { kind: principal } } }) } : undefined,
@@ -12,8 +12,12 @@ function harness(rejection, deliveryDelayMs = 10000, principal = 'owner') {
     on: (type, callback) => events.set(type, callback), effect,
   }
   applyHost(ctx, {
-    companion: { deliver: async payload => { effects.push(payload); return { status: 'rendered' } }, dispose: () => {}, withdraw: id => withdrawn.push(id), silence: id => silenced.push(id) },
-    legacy: (...args) => { effects.push(args); return true }, deliveryDelayMs, available: true,
+    transport: { deliver: async input => {
+      const policy = input.getPolicy()
+      if (!policy.popup && !policy.sound) return { delivery: 'suppressed' }
+      effects.push(input.payload)
+      return { delivery: 'accepted' }
+    }, retire: fact => withdrawn.push(fact.id) }, deliveryDelayMs,
   })
   async function request(path, method = 'GET', body) {
     const req = new EventEmitter(); req.method = method
@@ -26,7 +30,7 @@ function harness(rejection, deliveryDelayMs = 10000, principal = 'owner') {
     await task
     return { status, value }
   }
-  return { request, effects, events, withdrawn, silenced, cleanup: () => cleanups.reverse().forEach(callback => callback()) }
+  return { request, effects, events, withdrawn, cleanup: () => cleanups.reverse().forEach(callback => callback()) }
 }
 const body = { kind: 'completion', sessionId: 's1', sessionTitle: 'Project', title: 'Complete', body: 'Project · done', url: 'http://localhost:3080/', theme: {}, openLabel: 'Open', closeLabel: 'Close' }
 
@@ -85,7 +89,7 @@ test('online but unresponsive Web presence cannot permanently suppress host fall
     h.events.get('session/event')({ id: 's1', header: {} }, { type: 'turn/end', data: { turn: 42, reason: { kind: 'completed' } } })
     await new Promise(resolve => setTimeout(resolve, 40))
     assert.equal(h.effects.length, 1)
-    assert.equal(Array.isArray(h.effects[0]), false, 'initial presence supplies the theme before any Web delivery')
+    assert.equal(Array.isArray(h.effects[0]), false, 'host can deliver without client text')
   } finally { h.cleanup() }
 })
 
@@ -107,15 +111,21 @@ test('an older client delivery and the new delivery route share a host claim', a
 })
 
 
-test('channel changes retract queued windows independently from muting their audio', async () => {
+test('turning off visual notifications retires delivered entries', async () => {
   const h = harness()
   try {
     h.events.get('session/event')({ id: 's1', header: {} }, { type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } })
     await h.request('deliver', 'POST', body)
     await h.request('settings', 'POST', { revision: 0, patch: { popup: { enabled: false } } })
     assert.equal(h.withdrawn.length, 1)
-    assert.equal(h.silenced.length, 0)
-    await h.request('settings', 'POST', { revision: 1, patch: { sound: { enabled: false } } })
-    assert.equal(h.silenced.length, 1)
+  } finally { h.cleanup() }
+})
+
+test('a generic Web running edge keeps the host completion error in the notification', async () => {
+  const h = harness()
+  try {
+    h.events.get('session/event')({ id: 's1', header: {} }, { type: 'turn/end', data: { turn: 3, reason: { kind: 'error' } } })
+    await h.request('deliver', 'POST', body)
+    assert.match(h.effects[0].body, /出错/)
   } finally { h.cleanup() }
 })

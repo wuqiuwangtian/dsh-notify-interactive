@@ -1,7 +1,7 @@
 {
   "name": "dsh-notify-interactive",
-  "version": "0.2.1",
-  "description": "Interactive DSH Web reminders: approvals, questions, plan reviews, and turn completion with sound, an always-on-top DSH-styled popup, and Windows system notifications.",
+  "version": "0.3.0",
+  "description": "Native Windows Notification Center reminders and explicit replies for DSH Web.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -18,16 +18,7 @@
     "README.md",
     "README.en.md",
     "LICENSE",
-    "companion/main.cjs",
-    "companion/preload.cjs",
-    "companion/index.html",
-    "companion/renderer.js",
-    "companion/style.css",
-    "companion/package.json",
-    "companion/package-lock.json",
-    "scripts/install-companion.mjs",
-    "companion/protocol.cjs",
-    "scripts/stage-companion.mjs"
+    "scripts/uninstall-windows.mjs"
   ],
   "license": "MIT",
   "author": "wuqiuwangtian",
@@ -70,15 +61,12 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "check": "node --check lib/index.js && node --check lib/client.js && node --check companion/main.cjs && node --check companion/preload.cjs && node --check companion/renderer.js && node --check companion/protocol.cjs",
+    "check": "node --check lib/index.js && node --check lib/client.js && node --check scripts/uninstall-windows.mjs",
     "test": "node --test tests/*.test.mjs",
     "verify": "pnpm build && pnpm check && pnpm test && pnpm render-smoke",
     "render-smoke": "node scripts/render-smoke.mjs",
-    "companion:install": "node scripts/install-companion.mjs",
-    "companion:smoke": "pnpm build && node scripts/companion-smoke.mjs",
-    "coordination:smoke": "pnpm build && node scripts/coordination-smoke.mjs",
-    "interaction:smoke": "pnpm build && node scripts/interaction-smoke.mjs",
-    "native:acceptance": "pnpm build && node scripts/native-acceptance.mjs"
+    "native:acceptance": "pnpm build && node scripts/native-acceptance.mjs",
+    "windows:uninstall": "node scripts/uninstall-windows.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.25.0",
