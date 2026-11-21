@@ -6,7 +6,7 @@ Windows Notification Center reminders for DSH Web approvals, questions, plan rev
 
 ## Install or upgrade
 
-The local release candidate is **0.3.0**, tested with Arch WSL, Windows 11 and DSH 0.2.2-rc.5. Use DSH’s `plugin_manager` operation `install_bundle` with the absolute path of the extracted package or built checkout. Restart DSH Web and reload its open pages. The host registers a windowless Windows activator for the current user.
+Download and extract [dsh-notify-interactive-0.3.0.tgz](https://github.com/wuqiuwangtian/dsh-notify-interactive/releases/download/v0.3.0/dsh-notify-interactive-0.3.0.tgz). This version was tested with Arch WSL, Windows 11 and DSH 0.2.2-rc.5. Use DSH’s `plugin_manager` operation `install_bundle` with the absolute path of the extracted package or built checkout. Restart DSH Web and reload its open pages. The host registers a windowless Windows activator for the current user.
 
 Open the original browser and Web origin after upgrading. Existing profile settings take precedence. A browser with saved settings can migrate them into `notify-interactive.settings.json` in the current profile. A fresh browser leaves migration available until an explicit settings edit.
 

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-先读 `docs/requirements.md` 与 `docs/verification.md`。0.3.0 为本地候选版本，Windows 原生通知是正式投递通道。当前验收环境为 Arch WSL、Windows 11 和 DSH Web 0.2.2-rc.5。
+先读 `docs/requirements.md` 与 `docs/verification.md`。0.3.0 默认使用 Windows 原生通知。当前验收环境为 Arch WSL、Windows 11 和 DSH Web 0.2.2-rc.5。
 
 ## 实现约束
 

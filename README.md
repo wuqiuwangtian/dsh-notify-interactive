@@ -6,7 +6,7 @@ DSH Web 的审批、提问、计划审核和一轮结束可以进入 Windows 通
 
 ## 安装与升级
 
-本地候选版本为 **0.3.0**，已在 Arch WSL、Windows 11 与 DSH 0.2.2-rc.5 上验收。使用 DSH 的 `plugin_manager` 执行 `install_bundle`，target 指向解包目录或已构建的仓库绝对路径。已有本地链接的 profile 直接使用新版构建产物。升级后重启 DSH Web，刷新已打开的 DSH 标签。Windows 当前用户的无窗口激活程序在启动时自动注册。
+下载并解压 [dsh-notify-interactive-0.3.0.tgz](https://github.com/wuqiuwangtian/dsh-notify-interactive/releases/download/v0.3.0/dsh-notify-interactive-0.3.0.tgz)。此版本已在 Arch WSL、Windows 11 与 DSH 0.2.2-rc.5 上验收。使用 DSH 的 `plugin_manager` 执行 `install_bundle`，target 指向解包目录或已构建的仓库绝对路径。已有本地链接的 profile 直接使用新版构建产物。升级后重启 DSH Web，刷新已打开的 DSH 标签。Windows 当前用户的无窗口激活程序在启动时自动注册。
 
 升级时用原来的浏览器和 Web 地址打开页面。已有 profile 配置优先；只有浏览器里有旧配置或用户主动修改设置时，才首次写入 profile。存储文件为当前 profile 的 `notify-interactive.settings.json`。完成通知时机缺省为「离开当前会话时」。
 
